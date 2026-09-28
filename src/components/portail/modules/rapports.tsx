@@ -1,14 +1,9 @@
 import { FileDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { SectionTitle } from "@/components/portail/common"
-
 export function RapportsModule({ onExport }: { onExport: () => void }) {
   return (
     <>
-      <SectionTitle subtitle="Export des données budgétaires et de cotisation">
-        Rapports
-      </SectionTitle>
       <div className="grid max-w-120 gap-3">
         <Card>
           <CardContent className="flex items-center justify-between">

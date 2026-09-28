@@ -1,5 +1,3 @@
-import { Plus } from "lucide-react"
-import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import {
   Table,
@@ -9,27 +7,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { SectionTitle } from "@/components/portail/common"
 import { fmt } from "@/lib/format"
 import type { Paiement } from "@/types/portail"
 
-export function PaiementsModule({
-  paiements,
-  onNouveau,
-}: {
-  paiements: Paiement[]
-  onNouveau: () => void
-}) {
+export function PaiementsModule({ paiements }: { paiements: Paiement[] }) {
   return (
     <>
-      <div className="flex items-end justify-between">
-        <SectionTitle subtitle="Enregistrement des paiements et génération automatique des reçus">
-          Paiements & Reçus
-        </SectionTitle>
-        <Button onClick={onNouveau}>
-          <Plus size={14} /> Enregistrer un paiement
-        </Button>
-      </div>
       <Card className="py-0">
         <Table>
           <TableHeader>

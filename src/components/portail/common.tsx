@@ -45,6 +45,26 @@ export function StaffLines({ opacity = 0.25 }: { opacity?: number }) {
   )
 }
 
+export function ProgressBar({
+  value,
+  colorClassName = "bg-gold",
+  trackClassName = "bg-muted",
+}: {
+  value: number
+  colorClassName?: string
+  trackClassName?: string
+}) {
+  const pct = Math.max(0, Math.min(100, value))
+  return (
+    <div className={"h-1.5 w-full overflow-hidden rounded-full " + trackClassName}>
+      <div
+        className={"h-full rounded-full transition-[width] " + colorClassName}
+        style={{ width: `${pct}%` }}
+      />
+    </div>
+  )
+}
+
 export function MiniStat({
   label,
   value,

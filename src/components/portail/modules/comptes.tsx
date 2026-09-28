@@ -1,7 +1,8 @@
-import { Ban, History, RotateCcw, UserPlus } from "lucide-react"
+import { useMemo } from "react"
+import { Ban, RotateCcw, ShieldPlus, History } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Card } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import {
   Table,
   TableBody,
@@ -10,7 +11,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { SectionTitle } from "@/components/portail/common"
+import { MonoLabel } from "@/components/portail/common"
 import { ROLE_COLOR_CLASS, ROLE_LABEL } from "@/data/portail-mock"
 import type { Compte, Role } from "@/types/portail"
 
@@ -22,31 +23,49 @@ const COMMISSION_LABEL: Partial<Record<Role, string>> = {
 export function ComptesModule({
   comptes,
   full,
-  onCreer,
-  onToggle,
-  onRevoquer,
+  onDesactiver,
+  onRevoquerDemande,
+  onAttribuerRole,
 }: {
   comptes: Compte[]
   full: boolean
-  onCreer: () => void
-  onToggle: (id: string) => void
-  onRevoquer: (id: string, role: Role) => void
+  onDesactiver: (compte: Compte) => void
+  onRevoquerDemande: (compte: Compte) => void
+  onAttribuerRole: (compte: Compte) => void
 }) {
+  const stats = useMemo(() => {
+    const actifs = comptes.filter((c) => c.statut === "actif").length
+    const mandats = comptes.filter((c) => c.roles.some((r) => r !== "choriste")).length
+    return { total: comptes.length, actifs, desactives: comptes.length - actifs, mandats }
+  }, [comptes])
+
   return (
     <>
-      <div className="flex items-end justify-between">
-        <SectionTitle
-          subtitle={
-            full
-              ? "Création, désactivation et attribution des rôles"
-              : "Création et désactivation des comptes choriste et commissions"
-          }
-        >
-          Comptes & Rôles
-        </SectionTitle>
-        <Button onClick={onCreer}>
-          <UserPlus size={14} /> Créer un compte
-        </Button>
+      <div className="mb-5.5 grid grid-cols-4 gap-4">
+        <Card>
+          <CardContent>
+            <MonoLabel>Comptes au total</MonoLabel>
+            <div className="font-heading text-[26px] text-foreground">{stats.total}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent>
+            <MonoLabel>Comptes actifs</MonoLabel>
+            <div className="font-heading text-[26px] text-teal">{stats.actifs}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent>
+            <MonoLabel>Comptes désactivés</MonoLabel>
+            <div className="font-heading text-[26px] text-rust">{stats.desactives}</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent>
+            <MonoLabel>Mandats actifs</MonoLabel>
+            <div className="font-heading text-[26px] text-gold">{stats.mandats}</div>
+          </CardContent>
+        </Card>
       </div>
 
       <Card className="py-0">
@@ -112,11 +131,11 @@ export function ComptesModule({
                   </TableCell>
                   <TableCell>
                     {full ? (
-                      <div className="flex gap-2">
+                      <div className="flex flex-wrap gap-2">
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => onToggle(c.id)}
+                          onClick={() => onDesactiver(c)}
                         >
                           {c.statut === "actif" ? (
                             <Ban size={14} />
@@ -125,16 +144,18 @@ export function ComptesModule({
                           )}
                           {c.statut === "actif" ? "Désactiver" : "Réactiver"}
                         </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => onAttribuerRole(c)}
+                        >
+                          <ShieldPlus size={14} /> Attribuer un rôle
+                        </Button>
                         {c.roles.some((r) => r !== "choriste") && (
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() =>
-                              onRevoquer(
-                                c.id,
-                                c.roles.find((r) => r !== "choriste")!
-                              )
-                            }
+                            onClick={() => onRevoquerDemande(c)}
                           >
                             <History size={14} /> Révoquer rôle
                           </Button>
@@ -144,7 +165,7 @@ export function ComptesModule({
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => onToggle(c.id)}
+                        onClick={() => onDesactiver(c)}
                       >
                         {c.statut === "actif" ? (
                           <Ban size={14} />

@@ -1,32 +1,19 @@
-import { Plus, Trash2 } from "lucide-react"
-import { Button } from "@/components/ui/button"
+import { Trash2 } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
-import { SectionTitle, StaffLines } from "@/components/portail/common"
+import { StaffLines } from "@/components/portail/common"
 import type { Chant } from "@/types/portail"
 
 export function ChantsModule({
   chants,
   peutGerer,
-  onAjouter,
   onSupprimer,
 }: {
   chants: Chant[]
   peutGerer: boolean
-  onAjouter: () => void
   onSupprimer: (id: string) => void
 }) {
   return (
     <>
-      <div className="flex items-end justify-between">
-        <SectionTitle subtitle={peutGerer ? "Ajout, modification et validation de suppression" : "Consultation du répertoire"}>
-          Répertoire de chants
-        </SectionTitle>
-        {peutGerer && (
-          <Button onClick={onAjouter}>
-            <Plus size={14} /> Ajouter un chant
-          </Button>
-        )}
-      </div>
       <div className="grid grid-cols-2 gap-3">
         {chants.map((c) => (
           <Card key={c.id}>

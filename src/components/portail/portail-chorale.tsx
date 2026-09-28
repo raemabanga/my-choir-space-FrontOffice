@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react"
+import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom"
 import { toast } from "sonner"
 import {
   Users2,
@@ -12,6 +13,7 @@ import {
 } from "lucide-react"
 
 import { Sidebar, type ModuleDef } from "@/components/portail/sidebar"
+import { Header } from "@/components/portail/header"
 import { Accueil } from "@/components/portail/modules/accueil"
 import { ComptesModule } from "@/components/portail/modules/comptes"
 import { EvenementsModule } from "@/components/portail/modules/evenements"
@@ -20,7 +22,11 @@ import { PaiementsModule } from "@/components/portail/modules/paiements"
 import { BudgetModule } from "@/components/portail/modules/budget"
 import { ChantsModule } from "@/components/portail/modules/chants"
 import { RapportsModule } from "@/components/portail/modules/rapports"
+import { ParametresModule } from "@/components/portail/modules/parametres"
 import { CompteFormModal } from "@/components/portail/modals/compte-form-modal"
+import { AttribuerRoleModal } from "@/components/portail/modals/attribuer-role-modal"
+import { RevoquerRoleModal } from "@/components/portail/modals/revoquer-role-modal"
+import { DesactiverCompteModal } from "@/components/portail/modals/desactiver-compte-modal"
 import { EvenementFormModal } from "@/components/portail/modals/evenement-form-modal"
 import { DepenseFormModal } from "@/components/portail/modals/depense-form-modal"
 import { ChantFormModal } from "@/components/portail/modals/chant-form-modal"
@@ -35,20 +41,26 @@ import {
   initialPaiements,
   initialStatutaire,
 } from "@/data/portail-mock"
-import type { ModalState, ModuleKey, Role } from "@/types/portail"
+import type { ModalState, ModuleKey, Perms, Role } from "@/types/portail"
 
 function nowStr() {
   const d = new Date()
   return d.toISOString().slice(0, 10) + " " + d.toTimeString().slice(0, 5)
 }
 
-export default function PortailChorale() {
-  const [accountId, setAccountId] = useState("u1")
+export default function PortailChorale({
+  initialAccountId,
+  onLogout,
+}: {
+  initialAccountId?: string
+  onLogout: () => void
+}) {
+  const [accountId, setAccountId] = useState(initialAccountId ?? "u1")
   const account = DEMO_ACCOUNTS.find((a) => a.id === accountId)!
   const roles = account.roles
   const has = (r: Role) => roles.includes(r)
 
-  const perms = {
+  const perms: Perms = {
     comptes: has("admin_chorale") || has("secretaire"),
     comptesFull: has("admin_chorale"),
     evenements: has("bureau") || has("tresorier"),
@@ -61,22 +73,28 @@ export default function PortailChorale() {
   }
 
   const allModules: ModuleDef[] = [
-    { key: "accueil", label: "Accueil", icon: LayoutGrid, show: true },
-    { key: "comptes", label: "Comptes & Rôles", icon: Users2, show: perms.comptes },
-    { key: "evenements", label: "Événements", icon: CalendarDays, show: perms.evenements },
-    { key: "cotisations", label: "Cotisations", icon: Coins, show: perms.cotisations },
-    { key: "paiements", label: "Paiements & Reçus", icon: Receipt, show: perms.paiements },
-    { key: "budget", label: "Budget", icon: Wallet, show: perms.budget },
-    { key: "chants", label: "Répertoire de chants", icon: Music2, show: perms.chantsVoir },
-    { key: "rapports", label: "Rapports", icon: FileDown, show: perms.rapports },
+    { key: "accueil", label: "Accueil", icon: LayoutGrid, show: true, section: "Menu principal" },
+    { key: "comptes", label: "Comptes & Rôles", icon: Users2, show: perms.comptes, section: "Gestion chorale" },
+    { key: "evenements", label: "Événements", icon: CalendarDays, show: perms.evenements, section: "Gestion chorale" },
+    { key: "cotisations", label: "Cotisations", icon: Coins, show: perms.cotisations, section: "Gestion chorale" },
+    { key: "paiements", label: "Paiements & Reçus", icon: Receipt, show: perms.paiements, section: "Gestion chorale" },
+    { key: "budget", label: "Budget", icon: Wallet, show: perms.budget, section: "Gestion chorale" },
+    { key: "chants", label: "Répertoire de chants", icon: Music2, show: perms.chantsVoir, section: "Gestion chorale" },
+    { key: "rapports", label: "Rapports", icon: FileDown, show: perms.rapports, section: "Gestion chorale" },
   ]
   const modules = allModules.filter((m) => m.show)
 
-  const [view, setView] = useState<ModuleKey>("accueil")
+  const location = useLocation()
+  const navigate = useNavigate()
+  const view = (location.pathname.split("/").filter(Boolean)[0] || "accueil") as ModuleKey
+  const goTo = (key: ModuleKey) => navigate(`/${key}`)
+
   useEffect(() => {
-    if (!modules.find((m) => m.key === view)) setView("accueil")
+    if (view !== "parametres" && !modules.find((m) => m.key === view)) {
+      navigate("/accueil", { replace: true })
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [accountId])
+  }, [accountId, view])
 
   const [comptes, setComptes] = useState(initialComptes)
   const [evenements, setEvenements] = useState(initialEvenements)
@@ -109,6 +127,7 @@ export default function PortailChorale() {
       cs.map((x) => (x.id === id ? { ...x, statut: x.statut === "actif" ? "désactivé" : "actif" } : x))
     )
     toast.success(`${c.statut === "actif" ? "Compte désactivé" : "Compte réactivé"} — ${c.nom}`)
+    setModal(null)
   }
 
   const revoquerRole = (id: string, role: Role) => {
@@ -125,6 +144,28 @@ export default function PortailChorale() {
       )
     )
     toast.success("Rôle révoqué — retour au statut Choriste")
+    setModal(null)
+  }
+
+  const attribuerRole = (id: string, role: Role) => {
+    const c = comptes.find((x) => x.id === id)
+    if (!c || c.roles.includes(role)) return
+    setComptes((cs) =>
+      cs.map((x) =>
+        x.id === id
+          ? {
+              ...x,
+              roles: [...x.roles, role],
+              historique: [
+                ...x.historique,
+                { role, debut: nowStr().slice(0, 10), fin: null, auteur: account.nom },
+              ],
+            }
+          : x
+      )
+    )
+    toast.success(`Rôle attribué — ${c.nom}`)
+    setModal(null)
   }
 
   const creerEvenement = (form: { titre: string; date: string; type: string; budget: string; cotisation: string }) => {
@@ -222,66 +263,169 @@ export default function PortailChorale() {
   }
 
   return (
-    <div className="flex h-screen bg-background">
-      <Sidebar
-        account={account}
-        accountId={accountId}
-        onAccountChange={setAccountId}
-        roles={roles}
-        modules={modules}
-        view={view}
-        onViewChange={setView}
-      />
+    <div >
+      <div className="mx-auto flex h-[calc(100vh-1rem)] ">
+        <Sidebar
+          account={account}
+          accountId={accountId}
+          onAccountChange={setAccountId}
+          roles={roles}
+          modules={modules}
+          view={view}
+          onViewChange={goTo}
+          onLogout={onLogout}
+        />
 
-      <div className="flex-1 overflow-y-auto px-8.5 py-7.5 pb-15">
-        {view === "accueil" && (
-          <Accueil account={account} roles={roles} evenements={evenements} comptes={comptes} />
-        )}
-        {view === "comptes" && perms.comptes && (
-          <ComptesModule
-            comptes={comptes}
-            full={perms.comptesFull}
-            onCreer={() => setModal({ type: "compte" })}
-            onToggle={toggleCompteStatut}
-            onRevoquer={revoquerRole}
+        <div className="flex-1 overflow-y-auto">
+          <Header
+            view={view}
+            modules={modules}
+            account={account}
+            roles={roles}
+            perms={perms}
+            onNouveauCompte={() => setModal({ type: "compte" })}
+            onNouvelEvenement={() => setModal({ type: "evenement" })}
+            onNouveauPaiement={() => setModal({ type: "paiement", pre: {} })}
+            onNouveauChant={() => setModal({ type: "chant" })}
           />
-        )}
-        {view === "evenements" && perms.evenements && (
-          <EvenementsModule
-            evenements={evenements}
-            onCreer={() => setModal({ type: "evenement" })}
-            onSupprimer={supprimerEvenement}
-            onDepense={(evId) => setModal({ type: "depense", evId })}
-            onValiderDepense={validerDepense}
-          />
-        )}
-        {view === "cotisations" && perms.cotisations && (
-          <CotisationsModule
-            statutaire={statutaire}
-            evenements={evenements}
-            onPaiement={(pre) => setModal({ type: "paiement", pre })}
-            canPaiement={perms.paiements}
-          />
-        )}
-        {view === "paiements" && perms.paiements && (
-          <PaiementsModule paiements={paiements} onNouveau={() => setModal({ type: "paiement", pre: {} })} />
-        )}
-        {view === "budget" && perms.budget && <BudgetModule evenements={evenements} />}
-        {view === "chants" && perms.chantsVoir && (
-          <ChantsModule
-            chants={chants}
-            peutGerer={perms.chantsGerer}
-            onAjouter={() => setModal({ type: "chant" })}
-            onSupprimer={supprimerChant}
-          />
-        )}
-        {view === "rapports" && perms.rapports && (
-          <RapportsModule onExport={() => toast.success("Rapport exporté (PDF)")} />
-        )}
+          <div className="px-8.5 py-7.5 pb-15">
+            <Routes>
+              <Route index element={<Navigate to="accueil" replace />} />
+              <Route
+                path="accueil"
+                element={
+                  <Accueil
+                    evenements={evenements}
+                    comptes={comptes}
+                    statutaire={statutaire}
+                    chants={chants}
+                    paiements={paiements}
+                    perms={perms}
+                    onNavigate={goTo}
+                    onValiderDepense={validerDepense}
+                  />
+                }
+              />
+              <Route
+                path="comptes"
+                element={
+                  perms.comptes ? (
+                    <ComptesModule
+                      comptes={comptes}
+                      full={perms.comptesFull}
+                      onDesactiver={(c) => setModal({ type: "compte-statut", compte: c })}
+                      onRevoquerDemande={(c) => setModal({ type: "compte-revoquer", compte: c })}
+                      onAttribuerRole={(c) => setModal({ type: "compte-role", compte: c })}
+                    />
+                  ) : (
+                    <Navigate to="/accueil" replace />
+                  )
+                }
+              />
+              <Route
+                path="evenements"
+                element={
+                  perms.evenements ? (
+                    <EvenementsModule
+                      evenements={evenements}
+                      onSupprimer={supprimerEvenement}
+                      onDepense={(evId) => setModal({ type: "depense", evId })}
+                      onValiderDepense={validerDepense}
+                    />
+                  ) : (
+                    <Navigate to="/accueil" replace />
+                  )
+                }
+              />
+              <Route
+                path="cotisations"
+                element={
+                  perms.cotisations ? (
+                    <CotisationsModule
+                      statutaire={statutaire}
+                      evenements={evenements}
+                      onPaiement={(pre) => setModal({ type: "paiement", pre })}
+                      canPaiement={perms.paiements}
+                    />
+                  ) : (
+                    <Navigate to="/accueil" replace />
+                  )
+                }
+              />
+              <Route
+                path="paiements"
+                element={
+                  perms.paiements ? (
+                    <PaiementsModule paiements={paiements} />
+                  ) : (
+                    <Navigate to="/accueil" replace />
+                  )
+                }
+              />
+              <Route
+                path="budget"
+                element={
+                  perms.budget ? (
+                    <BudgetModule evenements={evenements} />
+                  ) : (
+                    <Navigate to="/accueil" replace />
+                  )
+                }
+              />
+              <Route
+                path="chants"
+                element={
+                  perms.chantsVoir ? (
+                    <ChantsModule
+                      chants={chants}
+                      peutGerer={perms.chantsGerer}
+                      onSupprimer={supprimerChant}
+                    />
+                  ) : (
+                    <Navigate to="/accueil" replace />
+                  )
+                }
+              />
+              <Route
+                path="rapports"
+                element={
+                  perms.rapports ? (
+                    <RapportsModule onExport={() => toast.success("Rapport exporté (PDF)")} />
+                  ) : (
+                    <Navigate to="/accueil" replace />
+                  )
+                }
+              />
+              <Route path="parametres" element={<ParametresModule />} />
+              <Route path="*" element={<Navigate to="/accueil" replace />} />
+            </Routes>
+          </div>
+        </div>
       </div>
 
       {modal?.type === "compte" && (
         <CompteFormModal onClose={() => setModal(null)} onCreer={creerCompte} full={perms.comptesFull} />
+      )}
+      {modal?.type === "compte-role" && (
+        <AttribuerRoleModal
+          compte={modal.compte}
+          onClose={() => setModal(null)}
+          onAttribuer={attribuerRole}
+        />
+      )}
+      {modal?.type === "compte-revoquer" && (
+        <RevoquerRoleModal
+          compte={modal.compte}
+          onClose={() => setModal(null)}
+          onRevoquer={revoquerRole}
+        />
+      )}
+      {modal?.type === "compte-statut" && (
+        <DesactiverCompteModal
+          compte={modal.compte}
+          onClose={() => setModal(null)}
+          onConfirmer={toggleCompteStatut}
+        />
       )}
       {modal?.type === "evenement" && (
         <EvenementFormModal onClose={() => setModal(null)} onCreer={creerEvenement} />

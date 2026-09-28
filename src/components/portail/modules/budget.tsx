@@ -7,7 +7,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import { SectionTitle, MonoLabel } from "@/components/portail/common"
+import { MonoLabel } from "@/components/portail/common"
 import { fmt } from "@/lib/format"
 import type { Evenement } from "@/types/portail"
 
@@ -20,9 +20,6 @@ export function BudgetModule({ evenements }: { evenements: Evenement[] }) {
 
   return (
     <>
-      <SectionTitle subtitle="Vue consolidée des recettes et dépenses de l'association">
-        Budget
-      </SectionTitle>
       <div className="mb-5.5 grid grid-cols-3 gap-4">
         <Card>
           <CardContent>

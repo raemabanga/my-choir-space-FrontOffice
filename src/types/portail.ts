@@ -16,10 +16,13 @@ export type ModuleKey =
   | "budget"
   | "chants"
   | "rapports"
+  | "parametres"
 
 export interface DemoAccount {
   id: string
   nom: string
+  telephone: string
+  email?: string
   roles: Role[]
 }
 
@@ -85,8 +88,23 @@ export interface Paiement {
   auteur: string
 }
 
+export interface Perms {
+  comptes: boolean
+  comptesFull: boolean
+  evenements: boolean
+  cotisations: boolean
+  paiements: boolean
+  budget: boolean
+  chantsGerer: boolean
+  chantsVoir: boolean
+  rapports: boolean
+}
+
 export type ModalState =
   | { type: "compte" }
+  | { type: "compte-role"; compte: Compte }
+  | { type: "compte-revoquer"; compte: Compte }
+  | { type: "compte-statut"; compte: Compte }
   | { type: "evenement" }
   | { type: "depense"; evId: string }
   | { type: "chant" }

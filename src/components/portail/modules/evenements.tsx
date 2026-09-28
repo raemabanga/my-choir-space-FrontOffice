@@ -2,34 +2,23 @@ import { Plus, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
-import { SectionTitle, MiniStat } from "@/components/portail/common"
+import { MiniStat } from "@/components/portail/common"
 import { fmt } from "@/lib/format"
 import type { Evenement } from "@/types/portail"
 
 export function EvenementsModule({
   evenements,
-  onCreer,
   onSupprimer,
   onDepense,
   onValiderDepense,
 }: {
   evenements: Evenement[]
-  onCreer: () => void
   onSupprimer: (id: string) => void
   onDepense: (evId: string) => void
   onValiderDepense: (evId: string, idx: number) => void
 }) {
   return (
     <>
-      <div className="flex items-end justify-between">
-        <SectionTitle subtitle="Création, suppression et suivi budgétaire par événement">
-          Événements
-        </SectionTitle>
-        <Button onClick={onCreer}>
-          <Plus size={14} /> Nouvel événement
-        </Button>
-      </div>
-
       <div className="grid gap-3.5">
         {evenements.map((e) => {
           const depTotal = e.depenses

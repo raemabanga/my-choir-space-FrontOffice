@@ -28,11 +28,37 @@ export const ROLE_COLOR_CLASS: Record<Role, string> = {
   commission_musicale: "text-muted-foreground border-border bg-muted",
 }
 
+export const DEMO_LOGIN_PASSWORD = "demo1234"
+
 export const DEMO_ACCOUNTS: DemoAccount[] = [
-  { id: "u1", nom: "Aïcha Koné", roles: ["admin_chorale"] },
-  { id: "u2", nom: "Paul Ndongo", roles: ["bureau", "secretaire", "choriste"] },
-  { id: "u3", nom: "Samuel Biya", roles: ["bureau", "choriste"] },
-  { id: "u4", nom: "Grâce Mbala", roles: ["tresorier", "choriste"] },
+  {
+    id: "u1",
+    nom: "Aïcha Koné",
+    telephone: "07 01 02 03 04",
+    email: "a.kone@mail.com",
+    roles: ["admin_chorale"],
+  },
+  {
+    id: "u2",
+    nom: "Paul Ndongo",
+    telephone: "07 02 03 04 05",
+    email: "p.ndongo@mail.com",
+    roles: ["bureau", "secretaire", "choriste"],
+  },
+  {
+    id: "u3",
+    nom: "Samuel Biya",
+    telephone: "07 03 04 05 06",
+    email: "s.biya@mail.com",
+    roles: ["bureau", "choriste"],
+  },
+  {
+    id: "u4",
+    nom: "Grâce Mbala",
+    telephone: "07 04 05 06 07",
+    email: "g.mbala@mail.com",
+    roles: ["tresorier", "choriste"],
+  },
 ]
 
 export const CHORISTES = [
