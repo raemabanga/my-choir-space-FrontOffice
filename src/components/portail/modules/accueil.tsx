@@ -30,11 +30,13 @@ import {
 } from "@/components/ui/table"
 import { ProgressBar } from "@/components/portail/common"
 import { ROLE_LABEL } from "@/data/portail-mock"
+import { anneeCourante, moisEcoules, statsStatutaire } from "@/lib/cotisations"
 import { fmt } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import type {
   Chant,
   Compte,
+  Depense,
   Evenement,
   ModuleKey,
   Paiement,
@@ -59,8 +61,12 @@ export function Accueil({
   statutaire,
   chants,
   paiements,
+  depenses,
+  utilisateur,
   perms,
   onNavigate,
+  onVoirPaiement,
+  onVoirEvenement,
   onValiderDepense,
 }: {
   evenements: Evenement[]
@@ -68,9 +74,13 @@ export function Accueil({
   statutaire: Statutaire
   chants: Chant[]
   paiements: Paiement[]
+  depenses: Depense[]
+  utilisateur: string
   perms: Perms
   onNavigate: (key: ModuleKey) => void
-  onValiderDepense: (evId: string, idx: number) => void
+  onVoirPaiement: (id: string) => void
+  onVoirEvenement: (id: string) => void
+  onValiderDepense: (id: string) => void
 }) {
   const annee = new Date().getFullYear()
 
@@ -80,22 +90,13 @@ export function Accueil({
   )
 
   const recouvrement = useMemo(() => {
-    const noms = Object.keys(statutaire.suivis)
-    const moisEcoules = Math.max(
-      1,
-      ...Object.values(statutaire.suivis).map((a) => a.lastIndexOf(1) + 1)
+    const annee = anneeCourante()
+    const stats = statsStatutaire(
+      statutaire.exercices[annee] ?? {},
+      moisEcoules(annee),
+      statutaire.mensualite
     )
-    const attendu = noms.length * moisEcoules
-    const paye = Object.values(statutaire.suivis).reduce(
-      (s, a) => s + a.slice(0, moisEcoules).reduce((x, y) => x + y, 0),
-      0
-    )
-    const aJour = noms.filter((n) =>
-      statutaire.suivis[n].slice(0, moisEcoules).every((v) => v === 1)
-    ).length
-    const pct = attendu ? Math.round((paye / attendu) * 100) : 0
-    const reste = Math.max(0, attendu - paye) * statutaire.mensualite
-    return { pct, aJour, total: noms.length, reste }
+    return { pct: stats.taux, aJour: stats.aJour, total: stats.total, reste: stats.reste }
   }, [statutaire])
 
   const nextEvent = useMemo(() => {
@@ -103,6 +104,12 @@ export function Accueil({
     const sorted = [...evenements].sort((a, b) => a.date.localeCompare(b.date))
     return sorted.find((e) => e.date >= today) ?? sorted[0]
   }, [evenements])
+
+  const engageProchain = nextEvent
+    ? depenses
+        .filter((d) => d.eventId === nextEvent.id && d.statut !== "rejetee")
+        .reduce((s, d) => s + d.montant, 0)
+    : 0
 
   const categoriesCount = useMemo(
     () => new Set(chants.map((c) => c.categorie)).size,
@@ -129,23 +136,24 @@ export function Accueil({
 
   const depensesEnAttente = useMemo(
     () =>
-      evenements.flatMap((e) =>
-        e.depenses
-          .map((d, idx) => ({ ...d, idx, evId: e.id, evTitre: e.titre }))
-          .filter((d) => !d.valide)
-      ),
-    [evenements]
+      depenses
+        .filter((d) => d.statut === "en_attente")
+        .map((d) => ({
+          ...d,
+          evTitre: evenements.find((e) => e.id === d.eventId)?.titre ?? "Frais généraux",
+        })),
+    [depenses, evenements]
   )
 
   const flux = useMemo(() => {
     const depenses = depensesEnAttente.map((d) => ({
       kind: "depense" as const,
-      key: `dep-${d.evId}-${d.idx}`,
+      key: `dep-${d.id}`,
       titre: d.libelle,
       badge: d.evTitre,
       montant: -d.montant,
-      evId: d.evId,
-      idx: d.idx,
+      depenseId: d.id,
+      saisiPar: d.saisiPar,
     }))
     const versements = paiements.slice(0, 6).map((p) => ({
       kind: "paiement" as const,
@@ -154,6 +162,7 @@ export function Accueil({
       badge: p.type,
       montant: p.montant,
       recu: p.recu,
+      paiementId: p.id,
     }))
     return [...depenses, ...versements].slice(0, 5)
   }, [depensesEnAttente, paiements])
@@ -175,27 +184,21 @@ export function Accueil({
   const [voix, setVoix] = useState<(typeof voixOptions)[number]>("Soprano")
   const [lecture, setLecture] = useState(false)
 
-  const liturgicalVars = {
-    fontFamily: "'Plus Jakarta Sans', sans-serif",
-    "--font-heading": "'EB Garamond', serif",
-    "--ebene": "#271900",
-  } as React.CSSProperties
 
   return (
-    <div style={liturgicalVars}>
-      <div className="grid grid-cols-4 gap-4">
-        <Card className="relative overflow-hidden rounded-2xl border-[rgba(198,146,45,0.28)] bg-[rgba(255,252,246,0.88)] shadow-[0_20px_40px_-15px_rgba(125,87,0,0.08)] backdrop-blur-md transition-shadow hover:shadow-lg">
-          <div className="absolute top-0 right-0 left-0 h-1 bg-gradient-to-r from-[rgba(198,146,45,0.6)] to-[rgba(223,171,72,0.15)]" />
+    <div>
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <Card className="relative overflow-hidden border border-[var(--line)] bg-white/75 shadow-[0_12px_30px_rgba(15,23,42,0.04)]">
           <CardContent>
             <div className="mb-2 flex items-center justify-between">
-              <div className="font-mono text-[10.5px] tracking-[0.1em] text-muted-foreground uppercase">
+              <div className="text-[11px] font-medium tracking-[0.12em] text-[var(--ink-light)] uppercase">
                 Trésorerie collectée
               </div>
               <div className="flex size-8 items-center justify-center rounded-full bg-[var(--gold)]/10 text-[var(--gold-strong)]">
                 <Wallet size={14} />
               </div>
             </div>
-            <div className="font-heading text-[26px] text-foreground">
+            <div className="text-[2rem] leading-tight font-semibold tracking-[-0.06em] text-[var(--ink)]">
               {fmt(totalPaiements)}
             </div>
             <div className="mt-1 text-[12px] text-muted-foreground">
@@ -205,11 +208,10 @@ export function Accueil({
           </CardContent>
         </Card>
 
-        <Card className="relative overflow-hidden rounded-2xl border-[rgba(198,146,45,0.28)] bg-[rgba(255,252,246,0.88)] shadow-[0_20px_40px_-15px_rgba(125,87,0,0.08)] backdrop-blur-md transition-shadow hover:shadow-lg">
-          <div className="absolute top-0 right-0 left-0 h-1 bg-gradient-to-r from-[rgba(198,146,45,0.6)] to-[rgba(223,171,72,0.15)]" />
+        <Card className="relative overflow-hidden border border-[var(--line)] bg-white/75 shadow-[0_12px_30px_rgba(15,23,42,0.04)]">
           <CardContent>
             <div className="mb-2 flex items-center justify-between">
-              <div className="font-mono text-[10.5px] tracking-[0.1em] text-muted-foreground uppercase">
+              <div className="text-[11px] font-medium tracking-[0.12em] text-[var(--ink-light)] uppercase">
                 Recouvrement cotisations
               </div>
               <div className="flex size-8 items-center justify-center rounded-full bg-teal/10 text-teal">
@@ -217,7 +219,7 @@ export function Accueil({
               </div>
             </div>
             <div className="flex items-baseline gap-2">
-              <div className="font-heading text-[26px] text-teal">{recouvrement.pct}%</div>
+              <div className="text-[2rem] leading-tight font-semibold tracking-[-0.06em] text-teal">{recouvrement.pct}%</div>
               <div className="text-[12px] text-muted-foreground">
                 {recouvrement.aJour}/{recouvrement.total} à jour
               </div>
@@ -231,11 +233,10 @@ export function Accueil({
           </CardContent>
         </Card>
 
-        <Card className="relative overflow-hidden rounded-2xl border-[rgba(198,146,45,0.28)] bg-[rgba(255,252,246,0.88)] shadow-[0_20px_40px_-15px_rgba(125,87,0,0.08)] backdrop-blur-md transition-shadow hover:shadow-lg">
-          <div className="absolute top-0 right-0 left-0 h-1 bg-gradient-to-r from-[rgba(198,146,45,0.6)] to-[rgba(223,171,72,0.15)]" />
+        <Card className="relative overflow-hidden border border-[var(--line)] bg-white/75 shadow-[0_12px_30px_rgba(15,23,42,0.04)]">
           <CardContent>
             <div className="mb-2 flex items-center justify-between">
-              <div className="font-mono text-[10.5px] tracking-[0.1em] text-muted-foreground uppercase">
+              <div className="text-[11px] font-medium tracking-[0.12em] text-[var(--ink-light)] uppercase">
                 Prochain événement
               </div>
               <div className="flex size-8 items-center justify-center rounded-full bg-[var(--gold)]/10 text-[var(--gold-strong)]">
@@ -272,18 +273,17 @@ export function Accueil({
           </CardContent>
         </Card>
 
-        <Card className="relative overflow-hidden rounded-2xl border-[rgba(198,146,45,0.28)] bg-[rgba(255,252,246,0.88)] shadow-[0_20px_40px_-15px_rgba(125,87,0,0.08)] backdrop-blur-md transition-shadow hover:shadow-lg">
-          <div className="absolute top-0 right-0 left-0 h-1 bg-gradient-to-r from-[rgba(198,146,45,0.6)] to-[rgba(223,171,72,0.15)]" />
+        <Card className="relative overflow-hidden border border-[var(--line)] bg-white/75 shadow-[0_12px_30px_rgba(15,23,42,0.04)]">
           <CardContent>
             <div className="mb-2 flex items-center justify-between">
-              <div className="font-mono text-[10.5px] tracking-[0.1em] text-muted-foreground uppercase">
+              <div className="text-[11px] font-medium tracking-[0.12em] text-[var(--ink-light)] uppercase">
                 Répertoire
               </div>
-              <div className="flex size-8 items-center justify-center rounded-full bg-[var(--ebene)] text-[var(--gold)]">
+              <div className="flex size-8 items-center justify-center rounded-full bg-[var(--navy)] text-[var(--gold-soft)]">
                 <Music2 size={14} />
               </div>
             </div>
-            <div className="font-heading text-[26px] text-foreground">{chants.length}</div>
+            <div className="text-[2rem] leading-tight font-semibold tracking-[-0.06em] text-[var(--ink)]">{chants.length}</div>
             <div className="mt-1 text-[12px] text-muted-foreground">
               chants répertoriés · {categoriesCount} catégorie{categoriesCount > 1 ? "s" : ""}
             </div>
@@ -291,9 +291,9 @@ export function Accueil({
         </Card>
       </div>
 
-      <div className="mt-5 grid grid-cols-3 gap-4">
-        <div className="col-span-2 flex flex-col gap-4">
-          <Card className="rounded-2xl border-[rgba(198,146,45,0.28)] bg-[rgba(255,252,246,0.88)] py-0 shadow-[0_20px_40px_-15px_rgba(125,87,0,0.08)] backdrop-blur-md">
+      <div className="mt-5 grid grid-cols-1 gap-5 xl:grid-cols-3">
+        <div className="flex min-w-0 flex-col gap-5 xl:col-span-2">
+          <Card className="border border-[var(--line)] bg-white/75 py-0 shadow-[0_12px_30px_rgba(15,23,42,0.04)]">
             <div className="flex items-center justify-between px-4 pt-4">
               <div>
                 <div className="font-heading text-base font-medium text-foreground">
@@ -306,7 +306,7 @@ export function Accueil({
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => toast("Filtrage par mode de paiement — bientôt disponible")}
-                  className="flex items-center gap-1.5 rounded-lg border border-[rgba(198,146,45,0.3)] bg-white px-3 py-1.5 text-[12px] text-foreground transition-colors hover:bg-[rgba(198,146,45,0.08)]"
+                  className="flex items-center gap-1.5 rounded-lg border border-[var(--line)] bg-white px-3 py-1.5 text-[12px] text-foreground transition-colors hover:bg-[var(--muted)]"
                 >
                   <ListFilter size={13} />
                   Filtrer par mode
@@ -314,7 +314,7 @@ export function Accueil({
                 {perms.paiements && (
                   <button
                     onClick={() => onNavigate("paiements")}
-                    className="flex items-center gap-1.5 rounded-lg bg-[var(--ebene)] px-3 py-1.5 text-[12px] font-medium text-[var(--gold)] transition-colors hover:bg-[var(--ebene)]/90"
+                    className="flex items-center gap-1.5 rounded-lg bg-[var(--navy)] px-3 py-1.5 text-[12px] font-medium text-white transition-colors hover:bg-[var(--navy-strong)]"
                   >
                     <ScrollText size={13} />
                     Grand Livre
@@ -324,11 +324,11 @@ export function Accueil({
             </div>
             <Table>
               <TableHeader>
-                <TableRow className="border-b border-[rgba(198,146,45,0.2)] bg-transparent hover:bg-transparent">
+                <TableRow className="border-b border-[var(--line)] bg-transparent hover:bg-transparent">
                   {["Bénéficiaire", "Motif", "Montant", "Action"].map((h) => (
                     <TableHead
                       key={h}
-                      className="font-mono text-[10.5px] tracking-[0.1em] text-[var(--gold-strong)] uppercase"
+                      className="text-[10px] font-semibold tracking-[0.14em] text-[var(--ink-light)] uppercase"
                     >
                       {h}
                     </TableHead>
@@ -344,7 +344,7 @@ export function Accueil({
                   </TableRow>
                 )}
                 {flux.map((f) => (
-                  <TableRow key={f.key} className="hover:bg-[rgba(198,146,45,0.06)]">
+                  <TableRow key={f.key} className="hover:bg-[var(--muted)]">
                     <TableCell className="text-[13px] font-medium text-foreground">
                       {f.titre}
                     </TableCell>
@@ -363,13 +363,17 @@ export function Accueil({
                     <TableCell>
                       {f.kind === "paiement" ? (
                         <button
-                          onClick={() => toast.success(`Reçu ${f.recu}`)}
-                          className="rounded-md bg-[var(--gold)]/15 px-2.5 py-1 font-mono text-[11px] text-[var(--gold-strong)] transition-colors hover:bg-[var(--gold)] hover:text-white"
+                          onClick={() =>
+                            perms.paiements
+                              ? onVoirPaiement(f.paiementId)
+                              : toast(`Reçu ${f.recu}`)
+                          }
+                          className="rounded-md bg-[var(--gold)]/15 px-2.5 py-1 text-[11px] text-[var(--gold-strong)] transition-colors hover:bg-[var(--gold)] hover:text-white"
                         >
                           Reçu
                         </button>
-                      ) : perms.evenements ? (
-                        <Button size="sm" onClick={() => onValiderDepense(f.evId, f.idx)}>
+                      ) : perms.depensesValider && f.saisiPar !== utilisateur ? (
+                        <Button size="sm" onClick={() => onValiderDepense(f.depenseId)}>
                           Valider
                         </Button>
                       ) : (
@@ -387,7 +391,7 @@ export function Accueil({
           </Card>
 
           {perms.evenements && nextEvent && (
-            <Card className="rounded-2xl border-[rgba(198,146,45,0.28)] bg-[rgba(255,252,246,0.88)] shadow-[0_20px_40px_-15px_rgba(125,87,0,0.08)] backdrop-blur-md">
+            <Card className="border border-[var(--line)] bg-white/75 shadow-[0_12px_30px_rgba(15,23,42,0.04)]">
               <CardContent>
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
@@ -398,13 +402,13 @@ export function Accueil({
                     <div className="mt-0.5 text-xs text-muted-foreground">{nextEvent.date}</div>
                   </div>
                   <button
-                    onClick={() => onNavigate("evenements")}
+                    onClick={() => onVoirEvenement(nextEvent.id)}
                     className="text-[12.5px] font-medium text-[var(--gold-strong)] hover:underline"
                   >
                     Voir l'événement
                   </button>
                 </div>
-                <div className="mt-4 grid grid-cols-2 gap-4">
+                <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div>
                     <div className="mb-1.5 flex items-center justify-between text-[12px] text-muted-foreground">
                       <span>Cotisation collectée</span>
@@ -427,15 +431,14 @@ export function Accueil({
                     <div className="mb-1.5 flex items-center justify-between text-[12px] text-muted-foreground">
                       <span>Budget engagé</span>
                       <span className="font-medium text-foreground">
-                        {fmt(nextEvent.depenses.reduce((s, d) => s + d.montant, 0))} /{" "}
+                        {fmt(engageProchain)} /{" "}
                         {fmt(nextEvent.budgetPrevisionnel)}
                       </span>
                     </div>
                     <ProgressBar
                       value={
                         nextEvent.budgetPrevisionnel
-                          ? (nextEvent.depenses.reduce((s, d) => s + d.montant, 0) /
-                              nextEvent.budgetPrevisionnel) *
+                          ? (engageProchain / nextEvent.budgetPrevisionnel) *
                             100
                           : 0
                       }
@@ -447,9 +450,9 @@ export function Accueil({
             </Card>
           )}
 
-          <Card className="rounded-2xl border-[rgba(198,146,45,0.28)] bg-[rgba(255,252,246,0.88)] shadow-[0_20px_40px_-15px_rgba(125,87,0,0.08)] backdrop-blur-md">
+          <Card className="border border-[var(--line)] bg-white/75 shadow-[0_12px_30px_rgba(15,23,42,0.04)]">
             <CardContent>
-              <div className="mb-4 flex flex-wrap items-start justify-between gap-3 border-b border-[rgba(198,146,45,0.2)] pb-3.5">
+              <div className="mb-4 flex flex-wrap items-start justify-between gap-3 border-b border-[var(--line)] pb-3.5">
                 <div>
                   <div className="mb-1 flex items-center gap-2">
                     <Badge className="normal-case tracking-normal">Messe du dimanche</Badge>
@@ -473,15 +476,15 @@ export function Accueil({
                 {pupitres.map((p) => (
                   <div
                     key={p.label}
-                    className="rounded-xl border border-[rgba(198,146,45,0.25)] bg-white/70 p-3"
+                    className="rounded-xl border border-[var(--line)] bg-white/70 p-3"
                   >
-                    <div className="mb-1 flex items-center justify-between font-mono text-[10px] tracking-[0.08em] text-muted-foreground uppercase">
+                    <div className="mb-1 flex items-center justify-between text-[10px] font-medium tracking-[0.12em] text-[var(--ink-light)] uppercase">
                       <span>{p.label}</span>
                     </div>
                     <div className="font-heading text-base text-foreground">
                       {p.present} <span className="text-[12px] text-muted-foreground">/ {p.total}</span>
                     </div>
-                    <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[rgba(198,146,45,0.15)]">
+                    <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[var(--muted)]">
                       <div
                         className="h-full rounded-full bg-[var(--gold)]"
                         style={{ width: `${p.total ? (p.present / p.total) * 100 : 0}%` }}
@@ -491,7 +494,7 @@ export function Accueil({
                 ))}
               </div>
 
-              <div className="mb-2 flex items-center gap-1.5 font-mono text-[11px] font-semibold text-[var(--gold-strong)] uppercase">
+              <div className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold tracking-[0.14em] text-[var(--ink-light)] uppercase">
                 <BookOpenText size={14} />
                 Ordo musical du dimanche
               </div>
@@ -499,9 +502,9 @@ export function Accueil({
                 {chants.slice(0, 2).map((c, i) => (
                   <div
                     key={c.id}
-                    className="rounded-xl border border-[rgba(198,146,45,0.25)] bg-white/60 p-3"
+                    className="rounded-xl border border-[var(--line)] bg-white/60 p-3"
                   >
-                    <div className="font-mono text-[10px] tracking-[0.08em] text-muted-foreground uppercase">
+                    <div className="text-[10px] font-medium tracking-[0.12em] text-[var(--ink-light)] uppercase">
                       {i === 0 ? "Chant d'entrée" : "Offertoire"}
                     </div>
                     <div className="mt-0.5 text-[13px] font-medium text-foreground">{c.titre}</div>
@@ -520,8 +523,8 @@ export function Accueil({
           </Card>
         </div>
 
-        <div className="flex flex-col gap-4">
-          <Card className="rounded-2xl border-[rgba(198,146,45,0.28)] bg-[rgba(255,252,246,0.88)] shadow-[0_20px_40px_-15px_rgba(125,87,0,0.08)] backdrop-blur-md">
+        <div className="flex min-w-0 flex-col gap-4">
+          <Card className="border border-[var(--line)] bg-white/75 shadow-[0_12px_30px_rgba(15,23,42,0.04)]">
             <CardContent>
               <div className="mb-3 font-heading text-base font-medium text-foreground">
                 Répartition des rôles
@@ -547,7 +550,7 @@ export function Accueil({
           </Card>
 
           {chantSignale && (
-            <Card className="rounded-2xl border-[rgba(198,146,45,0.28)] bg-[rgba(255,252,246,0.88)] shadow-[0_20px_40px_-15px_rgba(125,87,0,0.08)] backdrop-blur-md">
+            <Card className="border border-[var(--line)] bg-white/75 shadow-[0_12px_30px_rgba(15,23,42,0.04)]">
               <CardContent>
                 <div className="mb-3 flex items-center gap-2">
                   <Gavel size={16} className="text-amber" />
@@ -556,7 +559,7 @@ export function Accueil({
                   </div>
                 </div>
                 {arbitrageResolu ? (
-                  <div className="rounded-xl border border-[rgba(198,146,45,0.25)] bg-white/60 p-3.5 text-[12.5px] text-muted-foreground">
+                  <div className="rounded-xl border border-[var(--line)] bg-white/60 p-3.5 text-[12.5px] text-muted-foreground">
                     Décision enregistrée pour « {chantSignale.titre} ».
                   </div>
                 ) : (
@@ -565,7 +568,7 @@ export function Accueil({
                       Chant signalé lors des répétitions préparatoires, en attente de
                       validation par la commission musicale.
                     </p>
-                    <div className="space-y-2.5 rounded-xl border border-[rgba(198,146,45,0.3)] bg-white/70 p-3.5">
+                    <div className="space-y-2.5 rounded-xl border border-[var(--line)] bg-white/70 p-3.5">
                       <Badge variant="destructive" className="normal-case tracking-normal">
                         Non conforme rituel
                       </Badge>
@@ -590,7 +593,7 @@ export function Accueil({
                             setArbitrageResolu(true)
                             toast(`Envoyé en audition — ${chantSignale.titre}`)
                           }}
-                          className="w-full rounded-lg border border-[rgba(198,146,45,0.3)] bg-white px-2 py-2 text-[11px] font-medium text-foreground transition-colors hover:bg-[rgba(198,146,45,0.08)]"
+                          className="w-full rounded-lg border border-[var(--line)] bg-white px-2 py-2 text-[11px] font-medium text-foreground transition-colors hover:bg-[var(--muted)]"
                         >
                           Rejeter / Audition
                         </button>
@@ -603,7 +606,7 @@ export function Accueil({
           )}
 
           {perms.chantsVoir && chants.length > 0 && (
-            <Card className="rounded-2xl border-[rgba(198,146,45,0.28)] bg-[rgba(255,252,246,0.88)] shadow-[0_20px_40px_-15px_rgba(125,87,0,0.08)] backdrop-blur-md">
+            <Card className="border border-[var(--line)] bg-white/75 shadow-[0_12px_30px_rgba(15,23,42,0.04)]">
               <CardContent>
                 <div className="mb-3 flex items-center justify-between">
                   <div className="font-heading text-base font-medium text-foreground">
@@ -637,7 +640,7 @@ export function Accueil({
             </Card>
           )}
 
-          <div className="flex items-start gap-2.5 rounded-xl border-l-4 border-[var(--gold)] bg-gold-soft/70 px-3.5 py-3 text-[12.5px] text-[#6B5220]">
+          <div className="flex items-start gap-2.5 rounded-xl border border-[var(--line)] bg-[var(--gold-soft)]/45 px-3.5 py-3 text-[12.5px] text-[var(--ink-soft)]">
             <Receipt size={14} className="mt-0.5 shrink-0" />
             Le menu de gauche s'adapte automatiquement au(x) rôle(s) du compte
             sélectionné. Change de compte pour voir un autre point de vue sur
@@ -645,7 +648,7 @@ export function Accueil({
           </div>
 
           {chants.length > 0 && (
-            <Card className="rounded-2xl border-[rgba(198,146,45,0.28)] bg-[rgba(255,252,246,0.88)] shadow-[0_20px_40px_-15px_rgba(125,87,0,0.08)] backdrop-blur-md">
+            <Card className="border border-[var(--line)] bg-white/75 shadow-[0_12px_30px_rgba(15,23,42,0.04)]">
               <CardContent>
                 <div className="mb-3 flex items-center justify-between">
                   <div>
@@ -656,12 +659,12 @@ export function Accueil({
                       Raccords audio par pupitre
                     </div>
                   </div>
-                  <div className="flex size-7 items-center justify-center rounded-full bg-[var(--ebene)] text-[var(--gold)]">
+                  <div className="flex size-7 items-center justify-center rounded-full bg-[var(--navy)] text-[var(--gold-soft)]">
                     <Music2 size={14} />
                   </div>
                 </div>
 
-                <div className="mb-3 flex rounded-xl bg-muted p-1 font-mono text-[10.5px]">
+                <div className="mb-3 flex rounded-xl bg-muted p-1 text-[10.5px]">
                   {voixOptions.map((v) => (
                     <button
                       key={v}
@@ -678,12 +681,12 @@ export function Accueil({
                   ))}
                 </div>
 
-                <div className="rounded-xl border border-[rgba(198,146,45,0.25)] bg-white/70 p-3.5">
+                <div className="rounded-xl border border-[var(--line)] bg-white/70 p-3.5">
                   <div className="mb-2 flex items-center justify-between text-[12px]">
                     <span className="truncate font-medium text-foreground">
                       {chants[0].titre} — Voix isolée {voix}
                     </span>
-                    <span className="font-mono text-[11px] text-muted-foreground">
+                    <span className="text-[11px] text-muted-foreground">
                       {lecture ? "00:42 / 03:10" : "00:00 / 03:10"}
                     </span>
                   </div>
@@ -718,7 +721,7 @@ export function Accueil({
             </Card>
           )}
 
-          <div className="rounded-2xl border border-[rgba(198,146,45,0.28)] bg-gold-soft/40 p-4 text-center">
+          <div className="rounded-2xl border border-[var(--line)] bg-white/75 p-4 text-center">
             <div className="mx-auto mb-2 flex size-11 items-center justify-center rounded-full bg-white shadow-sm ring-1 ring-[var(--gold)]/40">
               <BadgeCheck size={20} className="text-[var(--gold-strong)]" />
             </div>

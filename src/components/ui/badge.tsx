@@ -5,20 +5,20 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "@/lib/utils"
 
 const badgeVariants = cva(
-  "group/badge inline-flex h-5 w-fit shrink-0 items-center justify-center gap-1 overflow-hidden rounded-full border border-transparent px-2 py-0.5 text-[11px] font-semibold whitespace-nowrap tracking-[0.04em] uppercase transition-all focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 [&>svg]:pointer-events-none [&>svg]:size-3!",
+  "group/badge inline-flex w-fit shrink-0 items-center justify-center gap-1 overflow-hidden rounded-full border px-2.5 py-1 text-[10px] font-semibold whitespace-nowrap tracking-[0.08em] uppercase transition-all focus-visible:ring-4 focus-visible:ring-[var(--ring)] [&>svg]:pointer-events-none [&>svg]:size-3!",
   {
     variants: {
       variant: {
-        default: "border-[rgba(212,175,55,0.4)] bg-[rgba(243,229,171,0.16)] text-[var(--gold-strong)] [a]:hover:bg-[rgba(243,229,171,0.22)]",
-        secondary:
-          "border-[rgba(18,18,18,0.08)] bg-[var(--secondary)] text-[var(--ebene)] [a]:hover:bg-[rgba(212,175,55,0.18)]",
-        destructive:
-          "bg-destructive/10 text-destructive focus-visible:ring-destructive/20 dark:bg-destructive/20 dark:focus-visible:ring-destructive/40 [a]:hover:bg-destructive/20",
+        default: "border-[rgba(17,24,39,0.08)] bg-[rgba(17,24,39,0.04)] text-[var(--ink-soft)]",
+        secondary: "border-[rgba(17,24,39,0.08)] bg-white/80 text-[var(--ink)]",
         outline:
-          "border-[rgba(212,175,55,0.4)] bg-transparent text-[var(--gold-strong)] [a]:hover:bg-[rgba(212,175,55,0.08)]",
-        ghost:
-          "hover:bg-muted hover:text-muted-foreground dark:hover:bg-muted/50",
-        link: "text-[var(--gold-strong)] underline-offset-4 hover:underline",
+          "border-[color-mix(in_srgb,var(--gold-strong)_45%,transparent)] bg-transparent text-[var(--gold-strong)]",
+        success: "border-[rgba(31,138,91,0.18)] bg-[var(--success-bg)] text-[var(--success)]",
+        warning: "border-[rgba(183,121,31,0.2)] bg-[var(--warning-bg)] text-[var(--warning)]",
+        destructive:
+          "border-[rgba(201,74,74,0.2)] bg-[rgba(201,74,74,0.06)] text-[var(--destructive)]",
+        ghost: "border-transparent hover:bg-muted hover:text-muted-foreground",
+        link: "border-transparent text-[var(--ink)] underline-offset-4 hover:underline",
       },
     },
     defaultVariants: {

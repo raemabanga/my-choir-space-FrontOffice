@@ -1,108 +1,89 @@
-import { Plus } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { MOIS } from "@/data/portail-mock"
-import { fmt } from "@/lib/format"
-import type { Evenement, Statutaire } from "@/types/portail"
+import { useSearchParams } from "react-router-dom"
+import { CalendarDays, IdCard } from "lucide-react"
+
+import { CotisationsEvenements } from "@/components/portail/cotisations/cotisations-evenements"
+import { CotisationsStatutaires } from "@/components/portail/cotisations/cotisations-statutaires"
+import { ROLE_LABEL } from "@/data/portail-mock"
+import { cn } from "@/lib/utils"
+import { useAppSettings } from "@/store/app-settings"
+import type { Compte, Evenement, StatutMois, Statutaire } from "@/types/portail"
+
+type Vue = "statutaires" | "evenements"
 
 export function CotisationsModule({
   statutaire,
   evenements,
+  comptes,
+  choristes,
   onPaiement,
+  onChangerStatut,
+  onVoirEvenement,
   canPaiement,
 }: {
   statutaire: Statutaire
   evenements: Evenement[]
+  comptes: Compte[]
+  choristes: string[]
   onPaiement: (pre: { choriste?: string; eventId?: string; type?: string }) => void
+  onChangerStatut: (annee: number, choriste: string, mois: number, statut: StatutMois) => void
+  onVoirEvenement: (id: string) => void
   canPaiement: boolean
 }) {
-  return (
-    <>
-      <Tabs defaultValue="statutaire" className="mb-4.5">
-        <TabsList>
-          <TabsTrigger value="statutaire">Statutaire</TabsTrigger>
-          <TabsTrigger value="evenementielle">Événementielle</TabsTrigger>
-        </TabsList>
+  const appName = useAppSettings((s) => s.appName)
+  const [params, setParams] = useSearchParams()
+  const vue: Vue = params.get("vue") === "evenements" ? "evenements" : "statutaires"
 
-        <TabsContent value="statutaire" className="mt-4.5">
-          <Card>
-            <CardContent>
-              <div className="mb-4 text-[12.5px] text-muted-foreground">
-                Montant annuel {fmt(statutaire.montantAnnuel)} réparti en{" "}
-                {fmt(statutaire.mensualite)}/mois — case cochée dès réception
-                du paiement, comme sur la carte physique.
-              </div>
-              {Object.entries(statutaire.suivis).map(([nom, mois]) => (
-                <div
-                  key={nom}
-                  className="flex items-center gap-3.5 border-t border-border py-2.5"
-                >
-                  <div className="w-32 shrink-0 text-[13px] font-medium text-foreground">
-                    {nom}
-                  </div>
-                  <div className="flex gap-1.5">
-                    {mois.map((paid, i) => (
-                      <div
-                        key={i}
-                        title={MOIS[i]}
-                        className={
-                          "flex h-[26px] w-[26px] items-center justify-center rounded border font-mono text-[9.5px] " +
-                          (paid
-                            ? "border-gold bg-gold text-white"
-                            : "border-border bg-muted text-muted-foreground")
-                        }
-                      >
-                        {MOIS[i][0]}
-                      </div>
-                    ))}
-                  </div>
-                  {canPaiement && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => onPaiement({ choriste: nom, type: "statutaire" })}
-                    >
-                      <Plus size={14} /> Encaisser
-                    </Button>
-                  )}
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        </TabsContent>
+  const roleDe = (nom: string) => {
+    const compte = comptes.find((c) => c.nom === nom)
+    const role = compte?.roles.find((r) => r !== "choriste")
+    if (compte?.statut === "désactivé") return "Membre · compte désactivé"
+    return role ? ROLE_LABEL[role] : "Membre"
+  }
 
-        <TabsContent value="evenementielle" className="mt-4.5">
-          <div className="grid gap-3">
-            {evenements.map((e) => (
-              <Card key={e.id}>
-                <CardContent className="flex items-center justify-between">
-                  <div>
-                    <div className="text-sm font-semibold text-foreground">
-                      {e.titre}
-                    </div>
-                    <div className="mt-0.5 text-xs text-muted-foreground">
-                      {fmt(e.cotisation.montant)} / choriste ·{" "}
-                      {fmt(e.cotisation.collecte)} collecté
-                    </div>
-                  </div>
-                  {canPaiement && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() =>
-                        onPaiement({ eventId: e.id, type: "evenementielle" })
-                      }
-                    >
-                      <Plus size={14} /> Encaisser
-                    </Button>
-                  )}
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </TabsContent>
-      </Tabs>
-    </>
+  const tabs = (
+    <div className="inline-flex gap-1 rounded-xl border border-[var(--line)] bg-white p-1">
+      {(
+        [
+          { key: "statutaires", label: "Statutaires", icon: IdCard },
+          { key: "evenements", label: "Événementielles", icon: CalendarDays },
+        ] as const
+      ).map(({ key, label, icon: Icon }) => (
+        <button
+          key={key}
+          type="button"
+          onClick={() => setParams(key === "statutaires" ? {} : { vue: key }, { replace: true })}
+          className={cn(
+            "flex items-center gap-2 rounded-lg px-3.5 py-1.5 text-[13px] font-medium text-[var(--ink-soft)] transition-colors hover:text-[var(--ink)]",
+            vue === key && "bg-[var(--navy)] text-white hover:text-white"
+          )}
+        >
+          <Icon className="size-4" /> {label}
+        </button>
+      ))}
+    </div>
+  )
+
+  return vue === "statutaires" ? (
+    <CotisationsStatutaires
+      appName={appName}
+      statutaire={statutaire}
+      choristes={choristes}
+      roleDe={roleDe}
+      canPaiement={canPaiement}
+      onPaiement={onPaiement}
+      onChangerStatut={onChangerStatut}
+      tabs={tabs}
+    />
+  ) : (
+    <CotisationsEvenements
+      appName={appName}
+      evenements={evenements}
+      choristes={choristes}
+      roleDe={roleDe}
+      canPaiement={canPaiement}
+      onPaiement={onPaiement}
+      onVoirEvenement={onVoirEvenement}
+      tabs={tabs}
+    />
   )
 }

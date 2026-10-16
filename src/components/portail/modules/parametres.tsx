@@ -79,7 +79,7 @@ export function ParametresModule() {
             <Input
               value={colorDraft}
               onChange={(e) => setColorDraft(e.target.value)}
-              className="max-w-32 font-mono uppercase"
+              className="max-w-32 uppercase"
               maxLength={7}
             />
           </div>

@@ -10,7 +10,13 @@ import {
 import { fmt } from "@/lib/format"
 import type { Paiement } from "@/types/portail"
 
-export function PaiementsModule({ paiements }: { paiements: Paiement[] }) {
+export function PaiementsModule({
+  paiements,
+  onVoir,
+}: {
+  paiements: Paiement[]
+  onVoir: (id: string) => void
+}) {
   return (
     <>
       <Card className="py-0">
@@ -18,7 +24,7 @@ export function PaiementsModule({ paiements }: { paiements: Paiement[] }) {
           <TableHeader>
             <TableRow className="bg-muted/60 hover:bg-muted/60">
               {["Date", "Choriste", "Cotisation", "Montant", "Reçu", "Enregistré par"].map((h) => (
-                <TableHead key={h} className="font-mono text-[10.5px] text-muted-foreground uppercase">
+                <TableHead key={h} className="text-[10.5px] text-muted-foreground uppercase">
                   {h}
                 </TableHead>
               ))}
@@ -26,12 +32,19 @@ export function PaiementsModule({ paiements }: { paiements: Paiement[] }) {
           </TableHeader>
           <TableBody>
             {paiements.map((p) => (
-              <TableRow key={p.id}>
-                <TableCell className="font-mono text-xs text-muted-foreground">{p.date}</TableCell>
+              <TableRow
+                key={p.id}
+                onClick={() => onVoir(p.id)}
+                className="cursor-pointer"
+                title="Voir le détail et le reçu"
+              >
+                <TableCell className="text-xs text-muted-foreground">{p.date}</TableCell>
                 <TableCell className="text-[13px] text-foreground">{p.choriste}</TableCell>
                 <TableCell className="whitespace-normal text-[12.5px] text-muted-foreground">{p.type}</TableCell>
                 <TableCell className="text-[13px] font-semibold text-teal">{fmt(p.montant)}</TableCell>
-                <TableCell className="font-mono text-xs text-gold">{p.recu}</TableCell>
+                <TableCell className="text-xs font-medium text-[var(--gold-strong)] underline-offset-2 hover:underline">
+                  {p.recu}
+                </TableCell>
                 <TableCell className="text-[12.5px] text-muted-foreground">{p.auteur}</TableCell>
               </TableRow>
             ))}

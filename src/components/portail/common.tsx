@@ -21,7 +21,7 @@ export function SectionTitle({
 
 export function MonoLabel({ children }: { children: ReactNode }) {
   return (
-    <div className="mb-2 font-mono text-[10.5px] tracking-[0.1em] text-muted-foreground uppercase">
+    <div className="mb-2 text-[11px] font-medium tracking-[0.12em] text-[var(--ink-light)] uppercase">
       {children}
     </div>
   )
@@ -76,7 +76,7 @@ export function MiniStat({
 }) {
   return (
     <div>
-      <div className="font-mono text-[10.5px] text-muted-foreground uppercase">
+      <div className="text-[10.5px] text-muted-foreground uppercase">
         {label}
       </div>
       <div className={"mt-0.5 text-[15px] font-semibold text-foreground " + (className ?? "")}>

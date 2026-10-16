@@ -8,7 +8,7 @@ export function RolePill({ role, label }: { role: Role; label?: string }) {
     <Badge
       variant="outline"
       className={cn(
-        "font-mono text-[10px] font-medium tracking-wide uppercase",
+        "text-[10px] font-medium tracking-wide uppercase",
         ROLE_COLOR_CLASS[role]
       )}
     >

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom"
 import { toast } from "sonner"
 import {
@@ -20,7 +20,10 @@ import { EvenementsModule } from "@/components/portail/modules/evenements"
 import { CotisationsModule } from "@/components/portail/modules/cotisations"
 import { PaiementsModule } from "@/components/portail/modules/paiements"
 import { BudgetModule } from "@/components/portail/modules/budget"
+import { PaiementDetailPage } from "@/components/portail/modules/paiement-detail"
+import { EvenementDetailPage } from "@/components/portail/modules/evenement-detail"
 import { ChantsModule } from "@/components/portail/modules/chants"
+import { ChantNouveauPage, type ChantForm } from "@/components/portail/modules/chant-nouveau"
 import { RapportsModule } from "@/components/portail/modules/rapports"
 import { ParametresModule } from "@/components/portail/modules/parametres"
 import { CompteFormModal } from "@/components/portail/modals/compte-form-modal"
@@ -28,8 +31,10 @@ import { AttribuerRoleModal } from "@/components/portail/modals/attribuer-role-m
 import { RevoquerRoleModal } from "@/components/portail/modals/revoquer-role-modal"
 import { DesactiverCompteModal } from "@/components/portail/modals/desactiver-compte-modal"
 import { EvenementFormModal } from "@/components/portail/modals/evenement-form-modal"
-import { DepenseFormModal } from "@/components/portail/modals/depense-form-modal"
-import { ChantFormModal } from "@/components/portail/modals/chant-form-modal"
+import { DepenseFormModal, type DepenseForm } from "@/components/portail/modals/depense-form-modal"
+import { DepenseRejetModal } from "@/components/portail/modals/depense-rejet-modal"
+import { RecetteFormModal, type RecetteForm } from "@/components/portail/modals/recette-form-modal"
+import type { BudgetContext } from "@/components/portail/budget/budget-shared"
 import { PaiementFormModal } from "@/components/portail/modals/paiement-form-modal"
 
 import {
@@ -37,11 +42,15 @@ import {
   DEMO_ACCOUNTS,
   initialChants,
   initialComptes,
+  initialDepenses,
   initialEvenements,
   initialPaiements,
+  initialRecettes,
   initialStatutaire,
+  TYPES_EVENEMENT,
 } from "@/data/portail-mock"
-import type { ModalState, ModuleKey, Perms, Role } from "@/types/portail"
+import { anneeCourante, moisCourant } from "@/lib/cotisations"
+import type { Justificatif, ModalState, ModuleKey, Perms, Role, StatutMois } from "@/types/portail"
 
 function nowStr() {
   const d = new Date()
@@ -67,6 +76,7 @@ export default function PortailChorale({
     cotisations: has("bureau") || has("tresorier"),
     paiements: has("tresorier"),
     budget: has("bureau") || has("tresorier"),
+    depensesValider: has("bureau") || has("tresorier"),
     chantsGerer: has("bureau"),
     chantsVoir: has("bureau") || has("tresorier"),
     rapports: has("admin_chorale") || has("bureau") || has("tresorier"),
@@ -86,7 +96,9 @@ export default function PortailChorale({
 
   const location = useLocation()
   const navigate = useNavigate()
-  const view = (location.pathname.split("/").filter(Boolean)[0] || "accueil") as ModuleKey
+  const segments = location.pathname.split("/").filter(Boolean)
+  const view = (segments[0] || "accueil") as ModuleKey
+  const subView = segments[1]
   const goTo = (key: ModuleKey) => navigate(`/${key}`)
 
   useEffect(() => {
@@ -98,18 +110,29 @@ export default function PortailChorale({
 
   const [comptes, setComptes] = useState(initialComptes)
   const [evenements, setEvenements] = useState(initialEvenements)
+  const [typesEvenement, setTypesEvenement] = useState(TYPES_EVENEMENT)
   const [statutaire, setStatutaire] = useState(initialStatutaire)
   const [chants, setChants] = useState(initialChants)
   const [paiements, setPaiements] = useState(initialPaiements)
+  const [depenses, setDepenses] = useState(initialDepenses)
+  const [recettes, setRecettes] = useState(initialRecettes)
   const [modal, setModal] = useState<ModalState>(null)
 
-  const creerCompte = (form: { nom: string; email: string; role: Role }) => {
+  // Tous les choristes : liste de base + tous les comptes (y compris créés depuis le portail)
+  const choristes = useMemo(
+    () => Array.from(new Set([...CHORISTES, ...comptes.map((c) => c.nom)])),
+    [comptes]
+  )
+  const [mobileNavOpen, setMobileNavOpen] = useState(false)
+
+  const creerCompte = (form: { nom: string; telephone: string; email: string; role: Role }) => {
     const id = "cp" + (comptes.length + 1)
     setComptes((c) => [
       ...c,
       {
         id,
         nom: form.nom,
+        telephone: form.telephone,
         email: form.email,
         roles: [form.role, "choriste"],
         statut: "actif",
@@ -177,8 +200,7 @@ export default function PortailChorale({
         date: form.date,
         type: form.type,
         budgetPrevisionnel: Number(form.budget) || 0,
-        cotisation: { montant: Number(form.cotisation) || 0, collecte: 0, attendu: CHORISTES.length },
-        depenses: [],
+        cotisation: { montant: Number(form.cotisation) || 0, collecte: 0, attendu: choristes.length, versements: {} },
       },
     ])
     toast.success(`Événement créé — ${form.titre}`)
@@ -190,24 +212,65 @@ export default function PortailChorale({
     toast.success("Événement supprimé")
   }
 
-  const enregistrerDepense = (evId: string, libelle: string, montant: string) => {
-    setEvenements((es) =>
-      es.map((e) =>
-        e.id === evId ? { ...e, depenses: [...e.depenses, { libelle, montant: Number(montant), valide: false }] } : e
-      )
-    )
+  /* ---------- Budget : dépenses et recettes ---------- */
+
+  const enregistrerDepense = (form: DepenseForm) => {
+    setDepenses((ds) => [
+      ...ds,
+      { ...form, id: "dp" + Date.now(), statut: "en_attente", rapproche: false, saisiPar: account.nom },
+    ])
     toast.success("Dépense enregistrée — en attente de validation")
+    setModal(null)
   }
 
-  const validerDepense = (evId: string, idx: number) => {
-    setEvenements((es) =>
-      es.map((e) =>
-        e.id === evId
-          ? { ...e, depenses: e.depenses.map((d, i) => (i === idx ? { ...d, valide: true } : d)) }
-          : e
-      )
+  const validerDepense = (id: string) => {
+    const d = depenses.find((x) => x.id === id)
+    if (!d) return
+    if (d.saisiPar === account.nom) {
+      toast.error("Vous ne pouvez pas valider une dépense que vous avez saisie.")
+      return
+    }
+    setDepenses((ds) => ds.map((x) => (x.id === id ? { ...x, statut: "validee", traitePar: account.nom } : x)))
+    toast.success(`Dépense validée — ${d.libelle}`)
+  }
+
+  const rejeterDepense = (id: string, motif: string) => {
+    setDepenses((ds) =>
+      ds.map((x) => (x.id === id ? { ...x, statut: "rejetee", motifRejet: motif, traitePar: account.nom } : x))
     )
-    toast.success("Dépense validée")
+    toast.success("Dépense rejetée")
+    setModal(null)
+  }
+
+  const toggleRapproche = (id: string) => {
+    setDepenses((ds) => ds.map((x) => (x.id === id ? { ...x, rapproche: !x.rapproche } : x)))
+  }
+
+  const joindreJustificatif = (id: string, justificatif: Justificatif) => {
+    setDepenses((ds) => ds.map((x) => (x.id === id ? { ...x, justificatif } : x)))
+    toast.success(`Justificatif joint — ${justificatif.nom}`)
+  }
+
+  const enregistrerRecette = (form: RecetteForm) => {
+    setRecettes((rs) => [...rs, { ...form, id: "rc" + Date.now(), saisiPar: account.nom }])
+    toast.success(`Recette enregistrée — ${form.libelle}`)
+    setModal(null)
+  }
+
+  const budgetCtx: BudgetContext = {
+    evenements,
+    depenses,
+    recettes,
+    utilisateur: account.nom,
+    peutSaisir: perms.budget,
+    peutValider: perms.depensesValider,
+    onNouvelleDepense: (evId) => setModal({ type: "depense", evId }),
+    onNouvelleRecette: (eventId) => setModal({ type: "recette", eventId }),
+    onValiderDepense: validerDepense,
+    onRejeterDepense: (depense) => setModal({ type: "depense-rejet", depense }),
+    onToggleRapproche: toggleRapproche,
+    onJoindreJustificatif: joindreJustificatif,
+    onAller: (chemin) => navigate(chemin),
   }
 
   const enregistrerPaiement = (form: {
@@ -218,43 +281,81 @@ export default function PortailChorale({
     type: string
   }) => {
     const recu = "RCU-2026-" + String(1000 + paiements.length).slice(-4)
+    const paiementId = "pa" + (paiements.length + 1)
     setPaiements((p) => [
       {
-        id: "pa" + (p.length + 1),
+        id: paiementId,
         date: nowStr(),
         choriste: form.choriste,
         type: form.type,
         montant: Number(form.montant),
         recu,
         auteur: account.nom,
+        eventId: form.eventId,
       },
       ...p,
     ])
     if (form.mois !== undefined) {
-      setStatutaire((s) => ({
-        ...s,
-        suivis: {
-          ...s.suivis,
-          [form.choriste]: s.suivis[form.choriste].map((v, i) => (i === form.mois ? 1 : v)),
-        },
-      }))
+      const annee = anneeCourante()
+      const statut: StatutMois = form.mois < moisCourant() ? 2 : 1
+      setStatutaire((s) => {
+        const exercice = s.exercices[annee] ?? {}
+        const carte = exercice[form.choriste] ?? (Array(12).fill(0) as StatutMois[])
+        return {
+          ...s,
+          exercices: {
+            ...s.exercices,
+            [annee]: {
+              ...exercice,
+              [form.choriste]: carte.map((v, i) => (i === form.mois ? statut : v)),
+            },
+          },
+        }
+      })
     } else if (form.eventId) {
       setEvenements((es) =>
         es.map((e) =>
           e.id === form.eventId
-            ? { ...e, cotisation: { ...e.cotisation, collecte: e.cotisation.collecte + Number(form.montant) } }
+            ? {
+                ...e,
+                cotisation: {
+                  ...e.cotisation,
+                  collecte: e.cotisation.collecte + Number(form.montant),
+                  versements: {
+                    ...e.cotisation.versements,
+                    [form.choriste]: (e.cotisation.versements[form.choriste] ?? 0) + Number(form.montant),
+                  },
+                },
+              }
             : e
         )
       )
     }
-    toast.success(`Paiement enregistré — reçu ${recu} généré`)
+    toast.success(`Paiement enregistré — reçu ${recu} généré`, {
+      action: { label: "Voir le reçu", onClick: () => navigate(`/paiements/${paiementId}`) },
+    })
     setModal(null)
   }
 
-  const ajouterChant = (form: { titre: string; compositeur: string; tonalite: string; categorie: string }) => {
+  const changerStatutMois = (annee: number, choriste: string, mois: number, statut: StatutMois) => {
+    setStatutaire((s) => ({
+      ...s,
+      exercices: {
+        ...s.exercices,
+        [annee]: {
+          ...s.exercices[annee],
+          [choriste]: (s.exercices[annee]?.[choriste] ?? (Array(12).fill(0) as StatutMois[])).map((v, i) =>
+            i === mois ? statut : v
+          ),
+        },
+      },
+    }))
+  }
+
+  const ajouterChant = (form: ChantForm) => {
     setChants((c) => [...c, { id: "ch" + (c.length + 1), ...form }])
     toast.success(`Chant ajouté — ${form.titre}`)
-    setModal(null)
+    navigate("/chants")
   }
 
   const supprimerChant = (id: string) => {
@@ -263,8 +364,8 @@ export default function PortailChorale({
   }
 
   return (
-    <div >
-      <div className="mx-auto flex h-[calc(100vh-1rem)] ">
+    <div className="min-h-screen bg-[var(--surface)]">
+      <div className="mx-auto flex min-h-screen max-w-[1800px]">
         <Sidebar
           account={account}
           accountId={accountId}
@@ -274,21 +375,32 @@ export default function PortailChorale({
           view={view}
           onViewChange={goTo}
           onLogout={onLogout}
+          mobileOpen={mobileNavOpen}
+          onNavigate={() => setMobileNavOpen(false)}
         />
+        {mobileNavOpen && (
+          <button
+            type="button"
+            aria-label="Fermer la navigation"
+            onClick={() => setMobileNavOpen(false)}
+            className="fixed inset-0 z-30 bg-[rgba(15,23,42,0.35)] lg:hidden"
+          />
+        )}
 
-        <div className="flex-1 overflow-y-auto">
+        <main className="min-w-0 flex-1 bg-[var(--surface)] print:bg-white">
           <Header
             view={view}
-            modules={modules}
+            subView={subView}
             account={account}
             roles={roles}
             perms={perms}
+            onMenuClick={() => setMobileNavOpen(true)}
             onNouveauCompte={() => setModal({ type: "compte" })}
             onNouvelEvenement={() => setModal({ type: "evenement" })}
             onNouveauPaiement={() => setModal({ type: "paiement", pre: {} })}
-            onNouveauChant={() => setModal({ type: "chant" })}
+            onNouveauChant={() => navigate("/chants/nouveau")}
           />
-          <div className="px-8.5 py-7.5 pb-15">
+          <div className="px-4 py-6 sm:px-6 xl:px-8 print:p-0">
             <Routes>
               <Route index element={<Navigate to="accueil" replace />} />
               <Route
@@ -300,8 +412,12 @@ export default function PortailChorale({
                     statutaire={statutaire}
                     chants={chants}
                     paiements={paiements}
+                    depenses={depenses}
+                    utilisateur={account.nom}
                     perms={perms}
                     onNavigate={goTo}
+                    onVoirPaiement={(id) => navigate(`/paiements/${id}`)}
+                    onVoirEvenement={(id) => navigate(`/evenements/${id}`)}
                     onValiderDepense={validerDepense}
                   />
                 }
@@ -328,9 +444,34 @@ export default function PortailChorale({
                   perms.evenements ? (
                     <EvenementsModule
                       evenements={evenements}
+                      depenses={depenses}
+                      recettes={recettes}
+                      onVoir={(id) => navigate(`/evenements/${id}`)}
                       onSupprimer={supprimerEvenement}
                       onDepense={(evId) => setModal({ type: "depense", evId })}
-                      onValiderDepense={validerDepense}
+                    />
+                  ) : (
+                    <Navigate to="/accueil" replace />
+                  )
+                }
+              />
+              <Route
+                path="evenements/:id"
+                element={
+                  perms.evenements ? (
+                    <EvenementDetailPage
+                      ctx={budgetCtx}
+                      evenements={evenements}
+                      paiements={paiements}
+                      choristes={choristes}
+                      peutEncaisser={perms.paiements}
+                      onRetour={() => navigate("/evenements")}
+                      onSupprimer={(id) => {
+                        supprimerEvenement(id)
+                        navigate("/evenements")
+                      }}
+                      onEncaisser={(pre) => setModal({ type: "paiement", pre })}
+                      onVoirPaiement={(id) => navigate(`/paiements/${id}`)}
                     />
                   ) : (
                     <Navigate to="/accueil" replace />
@@ -344,6 +485,10 @@ export default function PortailChorale({
                     <CotisationsModule
                       statutaire={statutaire}
                       evenements={evenements}
+                      comptes={comptes}
+                      choristes={choristes}
+                      onChangerStatut={changerStatutMois}
+                      onVoirEvenement={(id) => navigate(`/evenements/${id}`)}
                       onPaiement={(pre) => setModal({ type: "paiement", pre })}
                       canPaiement={perms.paiements}
                     />
@@ -356,7 +501,25 @@ export default function PortailChorale({
                 path="paiements"
                 element={
                   perms.paiements ? (
-                    <PaiementsModule paiements={paiements} />
+                    <PaiementsModule
+                      paiements={paiements}
+                      onVoir={(id) => navigate(`/paiements/${id}`)}
+                    />
+                  ) : (
+                    <Navigate to="/accueil" replace />
+                  )
+                }
+              />
+              <Route
+                path="paiements/:id"
+                element={
+                  perms.paiements ? (
+                    <PaiementDetailPage
+                      paiements={paiements}
+                      comptes={comptes}
+                      onRetour={() => navigate("/paiements")}
+                      onVoir={(id) => navigate(`/paiements/${id}`)}
+                    />
                   ) : (
                     <Navigate to="/accueil" replace />
                   )
@@ -366,7 +529,12 @@ export default function PortailChorale({
                 path="budget"
                 element={
                   perms.budget ? (
-                    <BudgetModule evenements={evenements} />
+                    <BudgetModule
+                      ctx={budgetCtx}
+                      statutaire={statutaire}
+                      choristes={choristes}
+                      paiements={paiements}
+                    />
                   ) : (
                     <Navigate to="/accueil" replace />
                   )
@@ -387,6 +555,19 @@ export default function PortailChorale({
                 }
               />
               <Route
+                path="chants/nouveau"
+                element={
+                  perms.chantsGerer ? (
+                    <ChantNouveauPage
+                      onAjouter={ajouterChant}
+                      onAnnuler={() => navigate("/chants")}
+                    />
+                  ) : (
+                    <Navigate to="/chants" replace />
+                  )
+                }
+              />
+              <Route
                 path="rapports"
                 element={
                   perms.rapports ? (
@@ -400,11 +581,16 @@ export default function PortailChorale({
               <Route path="*" element={<Navigate to="/accueil" replace />} />
             </Routes>
           </div>
-        </div>
+        </main>
       </div>
 
       {modal?.type === "compte" && (
-        <CompteFormModal onClose={() => setModal(null)} onCreer={creerCompte} full={perms.comptesFull} />
+        <CompteFormModal
+          comptes={comptes}
+          onClose={() => setModal(null)}
+          onCreer={creerCompte}
+          full={perms.comptesFull}
+        />
       )}
       {modal?.type === "compte-role" && (
         <AttribuerRoleModal
@@ -428,23 +614,41 @@ export default function PortailChorale({
         />
       )}
       {modal?.type === "evenement" && (
-        <EvenementFormModal onClose={() => setModal(null)} onCreer={creerEvenement} />
+        <EvenementFormModal
+          types={typesEvenement}
+          onCreerType={(t) => {
+            setTypesEvenement((ts) => [...ts, t])
+            toast.success(`Type d’événement ajouté — ${t}`)
+          }}
+          onClose={() => setModal(null)}
+          onCreer={creerEvenement}
+        />
       )}
       {modal?.type === "depense" && (
         <DepenseFormModal
+          evenements={evenements}
+          evIdInitial={modal.evId}
           onClose={() => setModal(null)}
-          onValider={(l, m) => {
-            enregistrerDepense(modal.evId, l, m)
-            setModal(null)
-          }}
+          onValider={enregistrerDepense}
         />
       )}
-      {modal?.type === "chant" && <ChantFormModal onClose={() => setModal(null)} onAjouter={ajouterChant} />}
+      {modal?.type === "depense-rejet" && (
+        <DepenseRejetModal depense={modal.depense} onClose={() => setModal(null)} onRejeter={rejeterDepense} />
+      )}
+      {modal?.type === "recette" && (
+        <RecetteFormModal
+          evenements={evenements}
+          eventIdInitial={modal.eventId}
+          onClose={() => setModal(null)}
+          onValider={enregistrerRecette}
+        />
+      )}
       {modal?.type === "paiement" && (
         <PaiementFormModal
           onClose={() => setModal(null)}
           onValider={enregistrerPaiement}
           evenements={evenements}
+          choristes={choristes}
           pre={modal.pre}
         />
       )}

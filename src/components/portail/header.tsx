@@ -1,20 +1,12 @@
 import type { ReactNode } from "react"
-import { Bell, ChevronRight, Plus, UserPlus } from "lucide-react"
+import { Bell, Menu, Plus, Search, UserPlus } from "lucide-react"
 import { toast } from "sonner"
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Search } from "lucide-react"
-import type { ModuleDef } from "@/components/portail/sidebar"
 import { ROLE_LABEL } from "@/data/portail-mock"
 import type { DemoAccount, ModuleKey, Perms, Role } from "@/types/portail"
-
-const liturgicalVars = {
-  fontFamily: "'Plus Jakarta Sans', sans-serif",
-  "--font-heading": "'EB Garamond', serif",
-  "--ebene": "#271900",
-} as React.CSSProperties
 
 type HeaderContent = {
   eyebrow?: string
@@ -25,10 +17,32 @@ type HeaderContent = {
 
 function getHeaderContent(
   view: ModuleKey,
+  subView: string | undefined,
   perms: Perms,
   account: DemoAccount,
   roles: Role[]
 ): HeaderContent {
+  if (view === "evenements" && subView) {
+    return {
+      eyebrow: "Événements",
+      title: "Détail de l’événement",
+      subtitle: "Cotisations des choristes, budget et dépenses",
+    }
+  }
+  if (view === "paiements" && subView) {
+    return {
+      eyebrow: "Paiements & Reçus",
+      title: "Détail du paiement",
+      subtitle: "Informations du versement et reçu imprimable",
+    }
+  }
+  if (view === "chants" && subView === "nouveau") {
+    return {
+      eyebrow: "Répertoire de chants",
+      title: "Nouveau chant",
+      subtitle: "Renseignez la fiche du chant et saisissez ses paroles",
+    }
+  }
   const annee = new Date().getFullYear()
   switch (view) {
     case "accueil":
@@ -55,7 +69,7 @@ function getHeaderContent(
     case "cotisations":
       return {
         title: "Cotisations",
-        subtitle: "Cotisation statutaire (carte à cocher) et cotisations événementielles",
+        subtitle: "Suivi des mensualités statutaires et des cotisations par événement",
       }
     case "paiements":
       return {
@@ -65,7 +79,7 @@ function getHeaderContent(
     case "budget":
       return {
         title: "Budget",
-        subtitle: "Vue consolidée des recettes et dépenses de l'association",
+        subtitle: "Dépenses, recettes, justificatifs et solde de la chorale",
       }
     case "chants":
       return {
@@ -89,6 +103,7 @@ function getHeaderContent(
 
 function HeaderActions({
   view,
+  subView,
   perms,
   onNouveauCompte,
   onNouvelEvenement,
@@ -96,6 +111,7 @@ function HeaderActions({
   onNouveauChant,
 }: {
   view: ModuleKey
+  subView: string | undefined
   perms: Perms
   onNouveauCompte: () => void
   onNouvelEvenement: () => void
@@ -130,19 +146,19 @@ function HeaderActions({
         </Button>
       )
     case "evenements":
-      return (
+      return subView ? null : (
         <Button size="sm" onClick={onNouvelEvenement}>
           <Plus size={14} /> Nouvel événement
         </Button>
       )
     case "paiements":
-      return (
+      return subView ? null : (
         <Button size="sm" onClick={onNouveauPaiement}>
           <Plus size={14} /> Enregistrer un paiement
         </Button>
       )
     case "chants":
-      return perms.chantsGerer ? (
+      return perms.chantsGerer && subView !== "nouveau" ? (
         <Button size="sm" onClick={onNouveauChant}>
           <Plus size={14} /> Ajouter un chant
         </Button>
@@ -154,102 +170,82 @@ function HeaderActions({
 
 export function Header({
   view,
-  modules,
+  subView,
   account,
   roles,
   perms,
+  onMenuClick,
   onNouveauCompte,
   onNouvelEvenement,
   onNouveauPaiement,
   onNouveauChant,
 }: {
   view: ModuleKey
-  modules: ModuleDef[]
+  subView?: string
   account: DemoAccount
   roles: Role[]
   perms: Perms
+  onMenuClick: () => void
   onNouveauCompte: () => void
   onNouvelEvenement: () => void
   onNouveauPaiement: () => void
   onNouveauChant: () => void
 }) {
-  const annee = new Date().getFullYear()
-  const content = getHeaderContent(view, perms, account, roles)
-  const moduleLabel = modules.find((m) => m.key === view)?.label ?? content.title
-  const crumbEnd = view === "accueil" ? `Exercice ${annee}` : moduleLabel
-
-  const initials = account.nom
-    .split(" ")
-    .map((s) => s[0])
-    .slice(0, 2)
-    .join("")
-    .toUpperCase()
+  const content = getHeaderContent(view, subView, perms, account, roles)
 
   return (
-    <div
-      style={liturgicalVars}
-      className="sticky top-0 z-20 border-b border-[rgba(198,146,45,0.14)] bg-[rgba(255,252,246,0.92)] shadow-[0_1px_0_rgba(198,146,45,0.1)] backdrop-blur-md"
-    >
-      <div className="flex flex-wrap items-center gap-2 px-8.5 pt-2.5 pb-1.5">
-        <div className="relative w-full max-w-56">
-          <Search
-            size={12.5}
-            className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-muted-foreground"
-          />
-          <Input
-            placeholder="Rechercher choriste, chant..."
-            className="h-7 rounded-full border-transparent bg-muted/50 pl-7.5 text-[12.5px] shadow-none transition-colors focus-visible:border-[var(--gold)]/40 focus-visible:bg-white"
-          />
+    <header className="print:hidden sticky top-0 z-20 flex min-h-20 flex-wrap items-center gap-3 border-b border-[var(--line)] bg-white px-4 py-3 sm:px-6 xl:px-8">
+      <button
+        type="button"
+        aria-label="Ouvrir la navigation"
+        onClick={onMenuClick}
+        className="inline-flex size-10 shrink-0 items-center justify-center rounded-lg text-[var(--ink-soft)] transition-colors hover:bg-[var(--surface-soft)] hover:text-[var(--ink)] focus-visible:ring-4 focus-visible:ring-[var(--ring)] focus-visible:outline-none lg:hidden"
+      >
+        <Menu className="size-5" />
+      </button>
+
+      <div className="min-w-0 flex-1">
+        <p className="text-[11px] font-medium tracking-[0.18em] text-[var(--ink-light)] uppercase">
+          {content.eyebrow ?? "Espace chorale"}
+        </p>
+        <div className="mt-1 flex flex-wrap items-center gap-2">
+          <h2 className="truncate font-heading text-2xl leading-tight tracking-[-0.05em] text-[var(--ink)] sm:text-[2rem]">
+            {content.title}
+          </h2>
+          {content.badge && <Badge variant="outline">{content.badge}</Badge>}
         </div>
-        <div className="flex items-center gap-1.5 rounded-full bg-muted/50 py-0.5 pr-2.5 pl-2 font-mono text-[9.5px] tracking-[0.06em] text-muted-foreground uppercase">
-          <span>{account.nom}</span>
-          <ChevronRight size={10} className="opacity-50" />
-          <span className="font-semibold text-[var(--gold-strong)]">{crumbEnd}</span>
+        {content.subtitle && (
+          <p className="mt-0.5 hidden truncate text-sm text-[var(--ink-soft)] sm:block">
+            {content.subtitle}
+          </p>
+        )}
+      </div>
+
+      <div className="flex w-full items-center gap-2 sm:w-auto">
+        <div className="relative hidden w-56 xl:block">
+          <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-[var(--ink-light)]" />
+          <Input placeholder="Rechercher choriste, chant..." className="h-9 pl-9" />
         </div>
-        <div className="ml-auto flex items-center gap-1.5">
+        <div className="flex flex-wrap items-center gap-2">
           <HeaderActions
             view={view}
+            subView={subView}
             perms={perms}
             onNouveauCompte={onNouveauCompte}
             onNouvelEvenement={onNouvelEvenement}
             onNouveauPaiement={onNouveauPaiement}
             onNouveauChant={onNouveauChant}
           />
-          <button
-            type="button"
-            aria-label="Notifications"
-            onClick={() => toast("Notifications — bientôt disponible")}
-            className="rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-          >
-            <Bell size={14} />
-          </button>
-          <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[var(--gold)] to-[var(--gold-strong)] font-heading text-[11px] font-semibold text-white shadow-[0_2px_8px_rgba(198,146,45,0.35)] ring-2 ring-white">
-            {initials}
-          </div>
         </div>
+        <button
+          type="button"
+          aria-label="Notifications"
+          onClick={() => toast("Notifications — bientôt disponible")}
+          className="ml-auto inline-flex size-9 shrink-0 items-center justify-center rounded-lg text-[var(--ink-soft)] transition-colors hover:bg-[var(--surface-soft)] hover:text-[var(--ink)] sm:ml-0"
+        >
+          <Bell className="size-4" />
+        </button>
       </div>
-
-      <div className="flex flex-wrap items-end justify-between gap-2 px-8.5 pb-2">
-        <div>
-          {content.eyebrow && (
-            <div className="mb-0.5 font-mono text-[9.5px] tracking-[0.12em] text-[var(--gold-strong)] uppercase">
-              {content.eyebrow}
-            </div>
-          )}
-          <h1 className="font-heading text-[18px] leading-tight font-semibold text-foreground">
-            {content.title}
-          </h1>
-          {content.subtitle && (
-            <div className="mt-0.5 text-[11.5px] text-muted-foreground">{content.subtitle}</div>
-          )}
-        </div>
-        {content.badge && (
-          <Badge className="border-none bg-gradient-to-r from-[var(--gold)]/15 to-[var(--gold-strong)]/10 font-mono text-[9.5px] font-semibold tracking-[0.04em] text-[var(--gold-strong)] normal-case">
-            {content.badge}
-          </Badge>
-        )}
-      </div>
-    </div>
+    </header>
   )
 }
-

@@ -1,4 +1,4 @@
-import { HelpCircle, LogOut, Music2, Settings, type LucideIcon } from "lucide-react"
+import { HelpCircle, LogOut, Settings, type LucideIcon } from "lucide-react"
 import { toast } from "sonner"
 import { DEMO_ACCOUNTS, ROLE_LABEL } from "@/data/portail-mock"
 import {
@@ -12,18 +12,51 @@ import { useAppSettings } from "@/store/app-settings"
 import type { DemoAccount, ModuleKey, Role } from "@/types/portail"
 import { cn } from "@/lib/utils"
 
-const liturgicalVars = {
-  fontFamily: "'Plus Jakarta Sans', sans-serif",
-  "--font-heading": "'EB Garamond', serif",
-  "--ebene": "#271900",
-} as React.CSSProperties
-
 export interface ModuleDef {
   key: ModuleKey
   label: string
   icon: LucideIcon
   show: boolean
   section?: string
+}
+
+function initialsOf(text: string) {
+  return text
+    .split(" ")
+    .filter(Boolean)
+    .map((s) => s[0])
+    .slice(0, 2)
+    .join("")
+    .toUpperCase()
+}
+
+function NavButton({
+  active,
+  icon: Icon,
+  label,
+  onClick,
+}: {
+  active: boolean
+  icon: LucideIcon
+  label: string
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-current={active ? "page" : undefined}
+      className={cn(
+        "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium text-[rgba(229,238,252,0.72)] transition-all duration-200",
+        "hover:bg-[var(--sidebar-accent)] hover:text-white",
+        active &&
+          "bg-[var(--sidebar-primary)] text-[var(--sidebar-primary-foreground)] shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--gold)_14%,transparent)]"
+      )}
+    >
+      <Icon className="size-4 shrink-0" />
+      <span className="truncate">{label}</span>
+    </button>
+  )
 }
 
 export function Sidebar({
@@ -35,6 +68,8 @@ export function Sidebar({
   view,
   onViewChange,
   onLogout,
+  mobileOpen,
+  onNavigate,
 }: {
   account: DemoAccount
   accountId: string
@@ -44,6 +79,8 @@ export function Sidebar({
   view: ModuleKey
   onViewChange: (key: ModuleKey) => void
   onLogout: () => void
+  mobileOpen: boolean
+  onNavigate: () => void
 }) {
   const primaryRole = roles.find((r) => r !== "choriste") ?? roles[0]
   const appName = useAppSettings((s) => s.appName)
@@ -59,138 +96,117 @@ export function Sidebar({
     return acc
   }, [])
 
+  const go = (key: ModuleKey) => {
+    onViewChange(key)
+    onNavigate()
+  }
+
   return (
-    <div
-      style={liturgicalVars}
-      className="flex w-64 shrink-0 flex-col justify-between border-r border-[rgba(198,146,45,0.14)] bg-[rgba(255,252,246,0.78)] text-[var(--ink)] shadow-[1px_0_0_rgba(198,146,45,0.06)]"
+    <aside
+      className={cn(
+        "fixed inset-y-0 left-0 z-40 flex h-screen print:hidden w-64 shrink-0 flex-col border-r border-[var(--sidebar-border)] bg-[var(--sidebar)] px-3 py-4 text-[var(--sidebar-foreground)] transition-transform duration-200 lg:sticky lg:top-0 lg:z-auto lg:translate-x-0",
+        mobileOpen ? "translate-x-0" : "-translate-x-full"
+      )}
     >
-      <div className="px-4 pt-5">
-        <div className="mb-5 flex items-center gap-3 border-b border-[rgba(198,146,45,0.12)] px-1 pb-5">
-          <div className="flex size-10 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-[var(--ebene)] to-[var(--ebene)]/80 shadow-[0_4px_12px_rgba(39,25,0,0.25)] ring-1 ring-[var(--gold)]/25">
-            <Music2 size={17} className="text-[var(--gold)]" />
+      <div className="mb-6 flex items-center gap-3 px-2.5 pt-2">
+        <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-[color-mix(in_srgb,var(--gold)_16%,transparent)] text-sm font-semibold text-[var(--gold-soft)] ring-1 ring-[color-mix(in_srgb,var(--gold)_30%,transparent)]">
+          {initialsOf(appName) || "LC"}
+        </div>
+        <div className="min-w-0">
+          <div className="text-[0.75rem] font-medium tracking-[0.2em] text-[rgba(229,238,252,0.62)] uppercase">
+            Espace chorale
           </div>
-          <div className="overflow-hidden">
-            <div className="font-heading text-[1.5rem] leading-none tracking-wide text-[var(--ink)]">
-              {appName}
-            </div>
-            <div className="mt-1 truncate font-mono text-[10px] tracking-[0.1em] text-[var(--muted-foreground)] uppercase">
-              Espace chorale
-            </div>
+          <div className="truncate font-heading text-[1.6rem] leading-none tracking-[-0.06em] text-white">
+            {appName}
           </div>
         </div>
-
-        <div className="mb-6 rounded-xl border border-[rgba(198,146,45,0.22)] bg-white/60 p-3 shadow-[0_1px_2px_rgba(198,146,45,0.06)]">
-          <div className="mb-2 flex items-center gap-2.5">
-            <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-[var(--gold)]/15 font-heading text-[12px] font-semibold text-[var(--gold-strong)]">
-              {account.nom
-                .split(" ")
-                .map((s) => s[0])
-                .slice(0, 2)
-                .join("")
-                .toUpperCase()}
-            </div>
-            <div className="min-w-0">
-              <div className="truncate text-[13px] font-semibold text-[var(--ink)]">
-                {account.nom}
-              </div>
-              <div className="flex items-center gap-1 text-[10.5px] text-[var(--muted-foreground)]">
-                <span className="size-1.5 shrink-0 rounded-full bg-teal" />
-                <span className="truncate font-mono tracking-[0.04em] uppercase">
-                  {primaryRole ? ROLE_LABEL[primaryRole] : "Choriste"}
-                </span>
-              </div>
-            </div>
-          </div>
-          <Select
-            value={accountId}
-            onValueChange={(v) => v && onAccountChange(v)}
-            items={Object.fromEntries(DEMO_ACCOUNTS.map((a) => [a.id, a.nom]))}
-          >
-            <SelectTrigger
-              aria-label="Changer de compte démo"
-              className="w-full rounded-lg border-[rgba(198,146,45,0.2)] bg-white/80 text-[11px] text-[var(--foreground)] focus-visible:ring-[var(--gold)]/40"
-            >
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {DEMO_ACCOUNTS.map((a) => (
-                <SelectItem key={a.id} value={a.id}>
-                  {a.nom}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <nav className="space-y-4">
-          {groups.map((group, i) => (
-            <div key={group.section || i}>
-              {group.section && (
-                <div className="mb-1.5 px-3 font-mono text-[10px] font-medium tracking-[0.12em] text-[var(--muted-foreground)] uppercase">
-                  {group.section}
-                </div>
-              )}
-              <div className="space-y-0.5">
-                {group.items.map((m) => (
-                  <button
-                    key={m.key}
-                    onClick={() => onViewChange(m.key)}
-                    className={cn(
-                      "relative flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-[13.5px] transition-all duration-150 after:absolute after:top-1.5 after:bottom-1.5 after:left-0 after:w-[3px] after:rounded-full after:content-['']",
-                      view === m.key
-                        ? "bg-[var(--gold)]/12 font-semibold text-[var(--ink)] after:bg-[var(--gold)]"
-                        : "text-[var(--muted-foreground)] after:bg-transparent hover:bg-[rgba(198,146,45,0.06)] hover:text-[var(--ink)]"
-                    )}
-                  >
-                    <m.icon
-                      size={15}
-                      className={view === m.key ? "text-[var(--gold-strong)]" : ""}
-                    />
-                    <span>{m.label}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          ))}
-        </nav>
       </div>
 
-      <div className="border-t border-[rgba(198,146,45,0.12)] px-4 py-4">
-        <div className="mb-1 space-y-0.5">
-          <button
-            type="button"
-            onClick={() => onViewChange("parametres")}
-            className={cn(
-              "relative flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-[13px] transition-all duration-150 after:absolute after:top-1 after:bottom-1 after:left-0 after:w-[3px] after:rounded-full after:content-['']",
-              view === "parametres"
-                ? "bg-[var(--gold)]/12 font-semibold text-[var(--ink)] after:bg-[var(--gold)]"
-                : "text-[var(--muted-foreground)] after:bg-transparent hover:bg-[rgba(198,146,45,0.06)] hover:text-[var(--ink)]"
+      <div className="mb-5 px-0.5">
+        <div className="mb-1.5 px-2 text-[10px] font-medium tracking-[0.16em] text-[rgba(229,238,252,0.5)] uppercase">
+          Compte de démonstration
+        </div>
+        <Select
+          value={accountId}
+          onValueChange={(v) => v && onAccountChange(v)}
+          items={Object.fromEntries(DEMO_ACCOUNTS.map((a) => [a.id, a.nom]))}
+        >
+          <SelectTrigger
+            aria-label="Changer de compte démo"
+            className="h-10 w-full border-[var(--sidebar-border)] bg-[rgba(148,163,184,0.06)] text-[13px] text-white shadow-none hover:bg-[rgba(148,163,184,0.1)] [&_svg]:text-[rgba(229,238,252,0.7)]"
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {DEMO_ACCOUNTS.map((a) => (
+              <SelectItem key={a.id} value={a.id}>
+                {a.nom}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <nav className="-mx-1 flex-1 space-y-5 overflow-y-auto px-1">
+        {groups.map((group, i) => (
+          <div key={group.section || i}>
+            {group.section && (
+              <div className="mb-1.5 px-3 text-[10px] font-medium tracking-[0.16em] text-[rgba(229,238,252,0.5)] uppercase">
+                {group.section}
+              </div>
             )}
-          >
-            <Settings
-              size={15}
-              className={view === "parametres" ? "text-[var(--gold-strong)]" : ""}
-            />
-            <span>Paramètres</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => toast("Assistance trésorerie — bientôt disponible")}
-            className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-left text-[13px] text-[var(--muted-foreground)] transition-colors hover:bg-[rgba(198,146,45,0.06)] hover:text-[var(--ink)]"
-          >
-            <HelpCircle size={15} />
-            <span>Assistance Trésorerie</span>
-          </button>
+            <div className="flex flex-col gap-1">
+              {group.items.map((m) => (
+                <NavButton
+                  key={m.key}
+                  active={view === m.key}
+                  icon={m.icon}
+                  label={m.label}
+                  onClick={() => go(m.key)}
+                />
+              ))}
+            </div>
+          </div>
+        ))}
+      </nav>
+
+      <div className="mt-4 flex flex-col gap-1 border-t border-[var(--sidebar-border)] pt-3">
+        <NavButton
+          active={view === "parametres"}
+          icon={Settings}
+          label="Paramètres"
+          onClick={() => go("parametres")}
+        />
+        <NavButton
+          active={false}
+          icon={HelpCircle}
+          label="Assistance trésorerie"
+          onClick={() => toast("Assistance trésorerie — bientôt disponible")}
+        />
+      </div>
+
+      <div className="mt-3 flex items-center gap-3 rounded-2xl border border-[var(--sidebar-border)] bg-[rgba(148,163,184,0.06)] p-2.5">
+        <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-[var(--gold-soft)] text-[0.68rem] font-semibold text-[var(--navy)]">
+          {initialsOf(account.nom)}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-sm font-medium text-white">{account.nom}</div>
+          <div className="truncate text-[11px] text-[rgba(229,238,252,0.68)]">
+            {primaryRole ? ROLE_LABEL[primaryRole] : "Choriste"}
+          </div>
         </div>
         <button
           type="button"
-          onClick={onLogout}
-          className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl border border-[rgba(198,146,45,0.22)] bg-white/50 py-2 text-[12px] font-medium text-[var(--muted-foreground)] transition-all hover:border-[rgba(198,146,45,0.35)] hover:bg-white hover:text-[var(--ink)] active:scale-[0.98]"
+          aria-label="Se déconnecter"
+          onClick={() => {
+            onLogout()
+            onNavigate()
+          }}
+          className="inline-flex size-8 items-center justify-center rounded-lg text-[rgba(229,238,252,0.8)] transition-colors hover:bg-[rgba(255,255,255,0.06)] hover:text-white"
         >
-          <LogOut size={14} />
-          <span>Clôturer la séance</span>
+          <LogOut className="size-4" />
         </button>
       </div>
-    </div>
+    </aside>
   )
 }

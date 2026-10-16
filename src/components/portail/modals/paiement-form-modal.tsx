@@ -17,13 +17,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { CHORISTES, MOIS } from "@/data/portail-mock"
+import { MOIS } from "@/data/portail-mock"
 import type { Evenement } from "@/types/portail"
 
 export function PaiementFormModal({
   onClose,
   onValider,
   evenements,
+  choristes,
   pre,
 }: {
   onClose: () => void
@@ -35,17 +36,22 @@ export function PaiementFormModal({
     type: string
   }) => void
   evenements: Evenement[]
+  choristes: string[]
   pre: { choriste?: string; type?: string; eventId?: string }
 }) {
-  const [choriste, setChoriste] = useState(pre.choriste || CHORISTES[0])
+  const [choriste, setChoriste] = useState(pre.choriste || choristes[0])
   const [mode, setMode] = useState<"statutaire" | "evenementielle">(
     pre.eventId ? "evenementielle" : (pre.type as "statutaire" | "evenementielle") || "statutaire"
   )
   const [mois, setMois] = useState(0)
   const [eventId, setEventId] = useState(pre.eventId || evenements[0]?.id)
-  const [montant, setMontant] = useState(
-    mode === "statutaire" ? "1000" : String(evenements[0]?.cotisation.montant || "")
-  )
+  const [montant, setMontant] = useState(() => {
+    if (mode === "statutaire") return "1000"
+    const ev = evenements.find((e) => e.id === eventId)
+    if (!ev) return ""
+    const reste = ev.cotisation.montant - (ev.cotisation.versements[choriste] ?? 0)
+    return String(reste > 0 ? reste : ev.cotisation.montant || "")
+  })
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
@@ -61,7 +67,7 @@ export function PaiementFormModal({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {CHORISTES.map((c) => (
+              {choristes.map((c) => (
                 <SelectItem key={c} value={c}>
                   {c}
                 </SelectItem>

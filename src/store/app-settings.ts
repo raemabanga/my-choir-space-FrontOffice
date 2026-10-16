@@ -2,7 +2,7 @@ import { create } from "zustand"
 import { persist } from "zustand/middleware"
 
 export const DEFAULT_APP_NAME = "Le Cahier"
-export const DEFAULT_ACCENT_COLOR = "#c6922d"
+export const DEFAULT_ACCENT_COLOR = "#d9b55d"
 
 interface AppSettingsState {
   appName: string

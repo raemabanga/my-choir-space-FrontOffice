@@ -41,17 +41,17 @@ export function ComptesModule({
 
   return (
     <>
-      <div className="mb-5.5 grid grid-cols-4 gap-4">
+      <div className="mb-5.5 grid grid-cols-2 gap-4 lg:grid-cols-4">
         <Card>
           <CardContent>
             <MonoLabel>Comptes au total</MonoLabel>
-            <div className="font-heading text-[26px] text-foreground">{stats.total}</div>
+            <div className="text-[2rem] leading-tight font-semibold tracking-[-0.06em] text-[var(--ink)]">{stats.total}</div>
           </CardContent>
         </Card>
         <Card>
           <CardContent>
             <MonoLabel>Comptes actifs</MonoLabel>
-            <div className="font-heading text-[26px] text-teal">{stats.actifs}</div>
+            <div className="text-[2rem] leading-tight font-semibold tracking-[-0.06em] text-teal">{stats.actifs}</div>
           </CardContent>
         </Card>
         <Card>
@@ -72,16 +72,16 @@ export function ComptesModule({
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/60 hover:bg-muted/60">
-              <TableHead className="font-mono text-[10.5px] text-muted-foreground uppercase">
+              <TableHead className="text-[10.5px] text-muted-foreground uppercase">
                 Nom
               </TableHead>
-              <TableHead className="font-mono text-[10.5px] text-muted-foreground uppercase">
+              <TableHead className="text-[10.5px] text-muted-foreground uppercase">
                 Rôles
               </TableHead>
-              <TableHead className="font-mono text-[10.5px] text-muted-foreground uppercase">
+              <TableHead className="text-[10.5px] text-muted-foreground uppercase">
                 Statut
               </TableHead>
-              <TableHead className="font-mono text-[10.5px] text-muted-foreground uppercase">
+              <TableHead className="text-[10.5px] text-muted-foreground uppercase">
                 Actions
               </TableHead>
             </TableRow>
@@ -101,7 +101,8 @@ export function ComptesModule({
                       {c.nom}
                     </div>
                     <div className="text-[11.5px] text-muted-foreground">
-                      {c.email}
+                      {c.telephone}
+                      {c.email && <> · {c.email}</>}
                     </div>
                   </TableCell>
                   <TableCell className="whitespace-normal">
